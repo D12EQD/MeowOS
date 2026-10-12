@@ -1,7 +1,7 @@
 #pragma once
 #include <nob.h>
 #include <assert.h>
-#include "pathlist.h"
+#include "flaglist.h"
 
 #define ANSI_RED   "\033[31m"
 #define ANSI_YELLOW "\033[33m"
@@ -13,7 +13,6 @@
 #define LOC     __FILE__ ":" STR(__LINE__) ": "
 #define build_add nob_cmd_append
 
-void build_add_flag(Nob_Cmd *cmd_ptr, const char ** flag, size_t count);
 void build_add_obj(Nob_Cmd *cmd_ptr, const char *c_input, const char *o_output);
 void build_run_obj_list(Nob_Cmd *cmd_ptr, const char **c_input, const char **o_output, size_t count);
 bool my_log(const char *color, const char *message);
@@ -23,5 +22,9 @@ bool my_log(const char *color, const char *message);
     (my_log(ANSI_RED, LOC "Build Error"))  \
 )
 
-#define C_FLAG_COUNT ( sizeof(C_FLAG) / sizeof(C_FLAG[0]) )
 #define PATH_MAX_LEN 1024
+
+struct BuildCtx{
+    const char * obj_dir;
+    const char * src_dir;
+};

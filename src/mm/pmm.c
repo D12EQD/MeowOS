@@ -20,7 +20,7 @@ void *memset(void *buf, char c, size_t n) {
     return buf;
 }
 
-paddr_t alloc_pages(u32 n) {
+paddr_t alloc_pages(u64 n) {
     static paddr_t next_paddr = (paddr_t) __free_ram;
     paddr_t paddr = next_paddr;
     next_paddr += n * KERNEL_PAGE_SIZE;

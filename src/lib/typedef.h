@@ -19,8 +19,8 @@ typedef unsigned short     uint16_t;
 typedef unsigned int       uint32_t;
 typedef unsigned long long uint64_t;
 
-typedef u32 paddr_t;
-typedef u32 vaddr_t;
-typedef u32 size_t;
+typedef u64 paddr_t;
+typedef u64 vaddr_t;
+typedef u64 size_t;
 
 
