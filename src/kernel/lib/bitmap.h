@@ -1,5 +1,5 @@
 #pragma once
-#include "lib/def.h"
+#include "kernel/lib/def.h"
 
 #define BIT_SET(map, index)   ((map)[(index) >> 3] |=  (1U << ((index) & 7)))
 #define BIT_UNSET(map, index) ((map)[(index) >> 3] &= ~(1U << ((index) & 7)))

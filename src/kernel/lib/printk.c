@@ -1,8 +1,17 @@
-#include "kernel/kernel.h"
-#include "lib/printf.h"
-#include "lib/string.h"
+#include "kernel/lib/printk.h"
+#include "kernel/lib/string.h"
+#include "kernel/arch/sbi.h"
 
 #define isdigit(x) ((x) >= '0' && (x) <= '9') 
+
+u64 print_filter_level = 0;
+
+void puts(char *s){
+    int idx; char a;
+    for (idx = 0, a = s[0]; a; idx ++, a = s[idx]){
+        putchar(a);
+    }
+}
 
 static int skip_atoi(const char **s){
     int i = 0;
@@ -278,7 +287,9 @@ int sprintf(char *buf, const char *fmt, ...){
     return i;
 }
 
-int printf(const char *fmt, ...){
+int printk(KernelPrintLevel level, const char *fmt, ...){
+    if (level & print_filter_level) return -1;
+
     char printf_buf[1024];
     va_list args;
     int printed;
@@ -292,3 +303,10 @@ int printf(const char *fmt, ...){
     return printed;
 }
 
+/*
+ * 设置需要屏蔽的输出内容等级
+ * 比如 set_print_filter(K_INFO | K_WARNING) 可以屏蔽这两个输出等级
+ */
+void set_print_filter(u64 new_level){
+    print_filter_level = new_level;
+}

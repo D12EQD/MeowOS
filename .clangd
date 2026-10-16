@@ -1,6 +1,30 @@
+If:
+  PathMatch: [.*\.c, .*\.h]
+
 CompileFlags:
+  Compiler: clang
   Add:
+    - -x
+    - c
     - -std=c23
-    - -Iinclude
-    - -I.
+    - -Isrc
     - -Wall
+    - -Wextra
+    - --target=riscv64-unknown-elf
+    - -march=rv64gc
+    - -mabi=lp64d
+    - -mcmodel=medany
+    - -ffreestanding
+    - -nostdlib
+    - -fno-stack-protector
+  Remove:
+    - -c
+    - -o
+    - -g3
+    - -O2
+
+Diagnostics:
+  Suppress: '*'
+
+Index:
+  Background: Build

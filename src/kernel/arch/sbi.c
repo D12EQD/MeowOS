@@ -1,5 +1,5 @@
-#include "lib/def.h"
-#include "arch/sbi.h"
+#include "kernel/lib/def.h"
+#include "kernel/arch/sbi.h"
 
 struct sbiret sbi_call(
     i64 arg0, i64 arg1, i64 arg2, 

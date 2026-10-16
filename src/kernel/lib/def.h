@@ -1,5 +1,5 @@
 #pragma once
-#include "lib/typedef.h"
+#include "kernel/lib/typedef.h"
 
 #define offsetof(type, member)   __builtin_offsetof(type, member)
 #define align_up(value, align)   __builtin_align_up(value, align)

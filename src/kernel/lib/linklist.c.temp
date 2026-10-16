@@ -5,7 +5,7 @@
 *   - 包括一个free linklist功能_imple
 */
 
-#include "ds/linklist.h"
+#include "lib/linklist.h"
 
 /*
 * 注意该函数只是初始化不创建

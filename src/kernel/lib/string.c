@@ -1,14 +1,28 @@
-#include "lib/def.h"
-#include "lib/string.h"
-
-#include "arch/sbi.h"
+#include "kernel/lib/def.h"
+#include "kernel/lib/string.h"
+#include "kernel/lib/printk.h"
+#include "kernel/arch/sbi.h"
 /* 
  * Console Putchar 
  * use stb_call
  */
+void *memcpy(void *dst, const void *src, size_t n) {
+    u8 *d = (u8 *) dst;
+    const u8 *s = (const u8 *) src;
+    while (n--)
+        *d++ = *s++;
+    return dst;
+}
 
-size_t strnlen(const char * s, int limit){
-    int res;
+void *memset(void *buf, char c, size_t n) {
+    u8 *p = (u8 *) buf;
+    while (n--)
+        *p++ = c;
+    return buf;
+}
+
+size_t strnlen(const char * s, size_t limit){
+    size_t res;
     for (res = 0; res < limit && s[res]; ++ res);
     return res;
 }
@@ -17,13 +31,6 @@ size_t strlen(const char *s){
     int res;
     for (res = 0; s[res]; res ++);
     return res;
-}
-
-void puts(char *s){
-    int idx; char a;
-    for (idx = 0, a = s[0]; a; idx ++, a = s[idx]){
-        putchar(a);
-    }
 }
 
 char *strcpy(char *dst, const char *src) {

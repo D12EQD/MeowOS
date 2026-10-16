@@ -1,6 +1,6 @@
-#include "lib/def.h"
-#include "mm/pmm.h"
-#include "lib/bitmap.h"
+#include "kernel/lib/def.h"
+#include "kernel/lib/bitmap.h"
+#include "kernel/lib/string.h"
 
 // 批量置 1 (Set Range)
 void bitmap_set_range(u8 *map, size_t start, size_t end) {
