@@ -16,3 +16,4 @@ compile_commands.json
 .cache/
 .DS_Store
 debug.txt
+script/makeheaders
