@@ -5,7 +5,9 @@
 *   - 包括一个free linklist功能_imple
 */
 
-#include "lib/linklist.h"
+#include "kernel/lib/linklist.h"
+#include "kernel/mm/pmm.h"
+#include "kernel/lib/def.h"
 
 /*
 * 注意该函数只是初始化不创建
@@ -198,16 +200,17 @@ bool list_delete_imple(List * l, ListNode * node){
 }
 
 /*
-* 释放整个链表节点，并且释放链表本身
+* 释放整个链表节点，不管链表本身
 */
-void link_list_free_imple(List *l){
+void link_list_free_imple(List *l){ 
     ListNode *cur = l->begin;
     while (cur) {
         ListNode *next = cur->next;
-        free(cur);
+        kfree(cur);
         cur = next;
     }
-    free(l);
+    l->begin = NULL;
+    l->end = NULL;
 }
 
 /*

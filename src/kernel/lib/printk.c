@@ -9,7 +9,7 @@ u64 print_filter_level = 0;
 void puts(char *s){
     int idx; char a;
     for (idx = 0, a = s[0]; a; idx ++, a = s[idx]){
-        putchar(a);
+        sbi_console_putchar(a);
     }
 }
 
@@ -236,6 +236,10 @@ int vsprintf(char *buf, const char *fmt, va_list args) {
             /* integer number formats - set up the flags and "break" */
             case 'o':
                 base = 8;
+                break;
+
+            case 'b':
+                base = 2;
                 break;
 
             case 'x':

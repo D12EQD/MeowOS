@@ -1,22 +1,21 @@
 #pragma once
-#include "kernel/lib/def.h"
 
 #define list_ptr(val) ((List *)(val))
 #define list_is_empty(val) ((!((list_ptr(val)))->begin))
 
-struct ListNode_s{
-    struct ListNode_s* prev;
-    struct ListNode_s* next;
+struct ListNode_t{
+    struct ListNode_t* prev;
+    struct ListNode_t* next;
 };
 
-struct List_s{
-    struct ListNode_s * begin; // 指向开始的位置
-    struct ListNode_s * end; // 指向最后一个位置
+struct List_t{
+    struct ListNode_t * begin; // 指向开始的位置
+    struct ListNode_t * end; // 指向最后一个位置
 };
 
 
-typedef struct ListNode_s ListNode;
-typedef struct List_s List;
+typedef struct ListNode_t ListNode;
+typedef struct List_t List;
 
 /* Interface */
 #define list_insert_front(l, n) list_insert_front_imple((List* )l, (ListNode *)n)

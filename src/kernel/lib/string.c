@@ -2,10 +2,7 @@
 #include "kernel/lib/string.h"
 #include "kernel/lib/printk.h"
 #include "kernel/arch/sbi.h"
-/* 
- * Console Putchar 
- * use stb_call
- */
+
 void *memcpy(void *dst, const void *src, size_t n) {
     u8 *d = (u8 *) dst;
     const u8 *s = (const u8 *) src;

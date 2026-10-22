@@ -23,8 +23,15 @@ CompileFlags:
     - -g3
     - -O2
 
+# Diagnostics:
+#   Suppress: '*'
 Diagnostics:
-  Suppress: '*'
+  UnusedIncludes: None
+  MissingIncludes: None
 
 Index:
   Background: Build
+
+InlayHints:
+  ParameterNames: No
+  Designators: No

@@ -8,10 +8,18 @@ typedef enum {
     K_ERROR     = 1 << 3,
 }KernelPrintLevel;
 
+// 不换行
 #define pr_info(fmt, ...)   printk(K_INFO,  fmt, ##__VA_ARGS__)
 #define pr_warn(fmt, ...)   printk(K_WARNING, fmt, ##__VA_ARGS__)
 #define pr_error(fmt, ...)  printk(K_ERROR, fmt, ##__VA_ARGS__)
 #define pr_debug(fmt, ...)  printk(K_DEBUG, fmt, ##__VA_ARGS__)
+
+// 换行
+#define prln_info(fmt, ...)   printk(K_INFO,  fmt "\n", ##__VA_ARGS__)
+#define prln_warn(fmt, ...)   printk(K_WARNING, fmt "\n", ##__VA_ARGS__)
+#define prln_error(fmt, ...)  printk(K_ERROR, fmt "\n", ##__VA_ARGS__)
+#define prln_debug(fmt, ...)  printk(K_DEBUG, fmt "\n", ##__VA_ARGS__)
+
 
 int vsprintf(char *buf, const char *fmt, va_list args);
 int sprintf(char *buf, const char *fmt, ...);
@@ -20,9 +28,9 @@ int printk(KernelPrintLevel level, const char *fmt, ...);
 void set_print_filter(u64 new_level);
 void puts(char *s);
 
-#define PANIC(fmt, ...) do { \
-    pr_error("Kernel Panic in %s:%d\n", __FILE__, __LINE__);    \
-    pr_error("Kernel Panic for the reason" fmt, ##__VA_ARGS__); \
+#define PANIC(fmt, ...) do {                                    \
+    prln_error("Kernel Panic for the reason  " fmt, ##__VA_ARGS__); \
     while (1);                                                  \
 } while (0)
 
+#define ASSERT(cond) do {if unlikely(!(cond)) { PANIC("Assert Error"); } } while(0)

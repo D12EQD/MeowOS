@@ -5,6 +5,7 @@ SECTIONS {
     . = 0x80200000;
     
     .text :{
+        PROVIDE(__start_text_section = .);
         /* boot 放最前面 KEEP 强调强制保留 */
         KEEP(*(.text.boot));
         *(.text .text.*); 
@@ -21,7 +22,8 @@ SECTIONS {
         ASSERT(__trampoline_section_end - __trampoline_section_start == 0x1000, "error: trampoline larger than one page");
         PROVIDE(__end_text_section = .);
     }
-
+    
+    __start_other_section = .;
     .rodata : ALIGN(16) {
         *(.rodata .rodata.*);
     }
@@ -43,6 +45,9 @@ SECTIONS {
         . += 128 * 1024; /* 128KB */
         __stack_top = .;
     }
+    . = ALIGN(0x1000);
+    __end_other_section = .;
+
     
     .free_ram (NOLOAD) : ALIGN(4096) {
         __free_ram = .;

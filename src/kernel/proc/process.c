@@ -1,26 +1,49 @@
 #include "kernel/proc/process.h"
+#include "kernel/proc/lock.h"
+
+#include "kernel/arch/def.h"
+#include "kernel/arch/trap.h"
+
 #include "kernel/lib/string.h"
 #include "kernel/lib/def.h"
 #include "kernel/lib/printk.h"
 
-struct process process_list[PROCESS_MAX_COUNT]; /* 定义进程控制块 */
-struct process *current_proc = NULL;            /* 当前运行的进程 */
-struct process *idle_proc = NULL;               /* 当前空闲进程 */
+#include "kernel/mm/def.h"
 
-struct process *create_process(u64 pc) {
-    struct process *proc = NULL;
-    int i;
-    for (i = 0; i < PROCESS_MAX_COUNT; i++) {
-        if (process_list[i].state == PROC_UNUSED) {
-            proc = &process_list[i];
-            break;
-        }
-    }
+EXTERN_SYMBOL(trampoline); // 蹦床代码，用于页表映射
 
-    if (!proc){
-        pr_info("no free process slots");
-        return NULL;
+Process process_list[PROCESS_MAX_COUNT]; /* 定义进程控制块 */
+
+#define get_cpuid() ({ int id = READ_REG(tp);  id; })
+
+static inline Process* get_current_process(){
+    int id = get_cpuid();
+    pr_info("cpu id is %d\n", id);
+    return &process_list[id];
+}
+
+void process_init(){
+    for (u64 i = 0; i < PROCESS_MAX_COUNT; i ++) {
+        process_list[i].kstack = KERNEL_STACK(i);
+        process_list[i].state = PROC_UNUSED;
     }
-    
+}
+
+void process_page(){
+
+}
+
+Process *create_process(u64 pc) {
+
     return NULL;
 }
+void yield(void){
+    (void)0;
+}
+
+//
+// void schedule(){
+//     critical_enter();
+//
+//     critical_exit();
+// }

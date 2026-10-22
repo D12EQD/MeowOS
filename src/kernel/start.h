@@ -1,4 +1,8 @@
 #pragma once
 
-// entry jmp here
-void kernel_start(void);
+typedef struct{
+    unsigned int timebase_frequency;
+}BootInfo;
+
+void kernel_start();
+

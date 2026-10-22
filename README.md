@@ -1,5 +1,8 @@
 # MeowOS
 
+## Trait
+
+1. 单核cpu 多线程
 
 ## Quick Start
 

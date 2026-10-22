@@ -1,15 +1,16 @@
 # 蹦床代码
 
-# 下面其实不是注释
-#include "kernel/arch/def.h"
+# 需要包括mm中对内存的布局定义
+#include "kernel/mm/def.h"
 
 .section .trampoline_section
+.globl trampoline
 .globl user_handle_trap
 
 trampoline:
 .align 4
-.globl trap_from_user
-trap_from_user:    
+.globl user_trap_entry
+user_trap_entry:    
         # trap.c sets stvec to point here, so
         # traps from user space start here,
         # in supervisor mode, but with a
@@ -83,8 +84,8 @@ trap_from_user:
         # call user_trap()
         jalr t0
 
-.globl trap_user_ret
-trap_user_ret:
+.globl user_trap_ret
+user_trap_ret:
         # user_trap() returns here, with user satp in a0.
         # return from kernel to user.
         # flush icache, in case this is the first time
