@@ -13,9 +13,11 @@
 /* static global function */
 #define EXTERN_SYMBOL(s) extern char s[];
 
+/* cpu 核心数量 */
+#define CPU_NUMBER 1
+
 /* csr function and define */
 
-#define __TIME_INTERVAL 1000000
 
 #define CSR_SATP        "satp"      // a table ?
 #define CSR_SCAUSE      "scause"
@@ -27,10 +29,11 @@
 #define CSR_TIME        "time"
 #define CSR_SIE         "sie"
 
+
+
 #ifndef _ASM
 #define _ASM __asm__ __volatile__
 #endif
-
 
 // 读取通用寄存器
 #define READ_REG(reg)                                   \

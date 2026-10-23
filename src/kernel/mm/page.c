@@ -49,6 +49,13 @@ void* kernel_alloc_page_table(){
     return res;
 }
 
+void *user_alloc_page_table(){
+    void *res = kalloc_page();
+    if (!res) return NULL;
+    memset(res, 0, PAGE_SIZE);
+    return res;
+}
+
 /* 
  * level-2页表 page_table 创建一个虚拟地址
  * args:
@@ -98,7 +105,7 @@ failed:
 
 
 /* 
- * 一般用于用户页释放
+ * 一般用于用户页释放，比如释放进程
  * 递归释放页表和页表项上的数据 
  * depth 指定最大的递归层数 如果为负数会一直dfs
  */
@@ -128,16 +135,15 @@ void free_walk(pt_t page_table, int depth){
  * permit_flag 不需要设置 PTE_V 会自动设置
  * returns: ture or false
  */
-bool mappages(pt_t page_table, u64 va, u64 size, u64 paddr, u64 permit_flag) {
+bool mappages(pt_t page_table, u64 va, u64 page_count, u64 paddr, u64 permit_flag) {
     u64 vaddr;
     pte_t* pte;
 
     if unlikely((va % PAGE_SIZE) != 0) PANIC("mappages: va not aligned");
-    if unlikely((size % PAGE_SIZE) != 0) PANIC("mappages: size not aligned");
-    if unlikely(size == 0) PANIC("mappages: size");
+    if unlikely(page_count == 0) PANIC("mappages: size");
     
     // 遍历所有 level-0 页表
-    for (vaddr = va; vaddr <= va + size - PAGE_SIZE; vaddr += PAGE_SIZE, paddr += PAGE_SIZE) {
+    for (vaddr = va; vaddr < va + page_count * PAGE_SIZE; vaddr += PAGE_SIZE, paddr += PAGE_SIZE) {
         pte = walk(page_table, true, vaddr);
 
         if (pte == NULL) return false;
@@ -151,7 +157,8 @@ bool mappages(pt_t page_table, u64 va, u64 size, u64 paddr, u64 permit_flag) {
 
 /* 分配内核页面 保证一定可以分配*/
 void kernel_mappages(pt_t page_table, u64 va, u64 size, u64 paddr, u64 permit_flag){
-    ASSERT(mappages(page_table, va, size, paddr, permit_flag) == true);
+    ASSERT(size % PAGE_SIZE == 0);
+    ASSERT(mappages(page_table, va, size >> PAGE_SIZE_LOG2, paddr, permit_flag) == true);
 }
 
 /* 初始化内核页面 */
@@ -172,7 +179,7 @@ void kernel_page_init(){
         kernel_page_table, 
         TRAMPOLINE_VADDR,
         (u64)__trampoline_section_end - (u64)__trampoline_section_start,
-        (u64)__trampoline_section_start, PTE_R| PTE_X
+        (u64)__trampoline_section_start, PTE_R | PTE_X
     );
     
     // 分配只读区域
@@ -191,12 +198,7 @@ void kernel_page_init(){
     );
 }
 
-void* user_alloc_page_table(){
-    void* res = kalloc_page();
-    if (!res) return NULL;
-    memset(res, 0, PAGE_SIZE);
-    return res;
-}
+
 
 /*
  * 根据虚拟地址和 level-2页表 找到物理地址
@@ -236,14 +238,58 @@ failed:
 }
 
 /*
- * 映射用户页面
+ * 为用户分配 count 个页面
+ * args:
+ *      page_table : 用户level-2页表
+ *      vaddr : 需要映射到的虚拟地址
+ *      count : 需要分配的页数量
+ *      perm : 许可位
+ * returns:
+ *      u64 : 分配页面数量，可能小于 count
  */
-bool user_map_pages(pt_t* page_table_ptr, u64 vaddr, u64 page_count){
-    *page_table_ptr = user_alloc_page_table();
-    if (!(*page_table_ptr)) goto page_table_alloc_failed; 
+u64 user_map_pages(pt_t page_table, u64 vaddr, u64 count, u64 perm){
+    if (!page_table) return 0;
+    
+    u64 res = 0;
+    for (u64 i = 0; i < count; i ++){
+        void *new = kalloc_page();
+        if (!new) break;
+        // 防御一下 防止调用者没用使用 PTE_U
+        if (mappages(page_table, vaddr, 1, (u64)new, PTE_U | perm) == false) break; 
+        res ++;
+    }
 
-    return true;
-page_table_alloc_failed:
-    return false;
+    return res;
+}
+
+/*
+ * 取消映射用户页表
+ * is_free 标志是否需要释放页表，调用kfree释放
+ */
+void user_unmap_pages(pt_t page_table, u64 start, u64 page_count, bool is_free){
+    if (start % PAGE_SIZE){
+        PANIC("user_unmap_pages : start is not align with page_size");
+    }
+    
+    for (u64 i = start; i < page_count * PAGE_SIZE + start; i += PAGE_SIZE){
+        pte_t * pte = walk(page_table, false, i);
+        if (!pte){
+            pr_warn("vaddr %lu do not existed in this page_table\n", i);
+            continue;
+        }
+
+        if (*pte & PTE_V){
+            pr_warn("vaddr %lu is not a vaild address in this page_table\n", i);
+            continue;
+        }
+
+        if (is_free){
+            kfree((void *)( 
+                 PTE_TO_PADDR((u64)( *pte )) 
+            ));
+        }
+
+        *pte = 0;
+    }
 }
 

@@ -19,6 +19,8 @@
 #define PAGE_SIZE 4096
 #define PAGE_SIZE_LOG2 12
 
+#define UESR_VADDR_START PAGE_SIZE * 4
+
 #define TRAMPOLINE_VADDR (MAX_VADDR - PAGE_SIZE)        // trampoline 帧最高
 #define TRAPFRAME_VADDR (TRAMPOLINE_VADDR - PAGE_SIZE)  // trap 帧第二高
 #define KERNEL_STACK(p) (TRAPFRAME_VADDR - ((p) + 1) * 2 * PAGE_SIZE)

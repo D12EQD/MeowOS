@@ -1,5 +1,5 @@
-.globl swtich_ctx
-swtich_ctx:
+.globl switch_ctx
+switch_ctx:
     sd ra, 0(a0)
     sd sp, 8(a0)
     sd s0, 16(a0)

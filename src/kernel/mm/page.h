@@ -67,9 +67,17 @@ typedef u64 pte_t;     // 页表项
 typedef pte_t* pt_t;   // 页表
 
 void kernel_page_init();
-bool mappages(pt_t page_table, u64 va, u64 size, u64 paddr, u64 permit_flag);
+bool mappages(pt_t page_table, u64 va, u64 page_count, u64 paddr, u64 permit_flag);
+
 pte_t* walk(pt_t pt_addr, bool is_alloc, u64 vaddr);
+void free_walk(pt_t page_table, int depth);
+
 void* kernel_alloc_page_table();
+void* user_alloc_page_table();
+
+void user_unmap_pages(pt_t page_table, u64 start, u64 page_count, bool is_free);
+
+
 void kernel_page_open();
 u64 vaddr_to_paddr(pt_t page_table, u64 vaddr);
 

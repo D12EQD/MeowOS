@@ -28,7 +28,6 @@ void bss_init(){
 
 /* 
  * 内核物理页面初始化 
- * 包括对所有物理页面收集 + 引用计数小对象分配
  */
 void kmm_init(){
     for (u64 i = ((u64)(__free_ram)); i < (u64)__free_ram_end; i += PAGE_SIZE){
@@ -51,7 +50,8 @@ void kfree(void* paddr){
     return;
 }
 
-/* 分配一个物理页框 或 一个普通页面，取决于是否开启分页 */
+
+/* 分配一个物理页框 或 一个普通页面，不取决于是否开启分页，该系统中内核页面和物理页面虚拟地址等价*/
 void *kalloc_page(void){
     if unlikely(list_is_empty(&free_list)) {
         pr_warn("phsical memory is used up\n");

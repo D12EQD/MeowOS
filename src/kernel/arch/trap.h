@@ -19,8 +19,17 @@ static inline u64 interrupt_off() {
     return res;
 }
 
-static inline bool is_interrupt(){
+// is interrupt ?
+static inline bool is_enable_interrupt(u64 *ret){
     u64 x = READ_CSR(CSR_SSTATUS);
+    *ret = x;
     return (x & SSTATUS_SIE) == 0;
 }
+
+static inline bool is_disable_interrupt(u64 *ret){
+    u64 x = READ_CSR(CSR_SSTATUS);
+    *ret = x;
+    return (x & SSTATUS_SIE) != 0;
+}
+
 

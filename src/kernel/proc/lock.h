@@ -1,5 +1,15 @@
 #pragma once
 #include "kernel/lib/def.h"
+#include "kernel/proc/process.h"
 
-u64 critical_enter();
-u64 critical_exit();
+/* 自旋锁 */
+typedef struct {
+    u32 lock;
+    Cpu *cpu;
+    char *name;      // debug
+} SpinLock;
+
+void critical_enter();
+void critical_exit();
+void get_spin_lock();
+void 
