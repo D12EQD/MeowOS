@@ -13,11 +13,13 @@
 #define likely(x)	(__builtin_expect(!!(x), 1))
 #define unlikely(x)	(__builtin_expect(!!(x), 0))
 
-#define container_of(ptr, type, member)				\
-	_Generic(ptr,							\
+#define container_of(ptr, type, member)             \
+	_Generic(ptr,                                   \
 		const typeof(*(ptr)) *: ((const type *)container_of(ptr, type, member)),\
 		default: ((type *)container_of(ptr, type, member))	\
 	)
+
+#define __always_inline inline __attribute__((__always_inline__))
 
 #ifndef _ASM
 #define _ASM __asm__ __volatile__

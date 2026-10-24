@@ -13,25 +13,27 @@
 #include "kernel/mm/pmm.h"
 
 EXTERN_SYMBOL(trampoline); // 蹦床代码，用于页表映射
-EXTERN_SYMBOL(switch_ctx); // 上下切换代码
+
+void switch_ctx(ThreadCtx *c1, ThreadCtx* c2);
 
 Process process_list[PROCESS_MAX_COUNT]; /* 定义进程控制块 */
 Cpu cpu_list[CPU_NUMBER];
 
-#define get_cpuid() ({ int id = READ_REG(tp);  id; })
+Process* idle_process;
+Process* current_process;
 
 static inline void process_free_page_table(Process* p){
     user_unmap_pages(p->page_table, TRAPFRAME_VADDR, 1, true);
     user_unmap_pages(p->page_table, TRAMPOLINE_VADDR, 1, true);
-    user_unmap_pages(p->page_table, UESR_VADDR_START, p->alloc_page_count, true);
+    user_unmap_pages(p->page_table, USER_VADDR_START, p->alloc_page_count, true);
     free_walk(p->page_table, 2);
 }
 
-/* 获取当前cpu绑定的struct Cpu */
-Cpu* get_cpu(){
-    int id = get_cpuid();
-    pr_info("cpu id is %d\n", id);
-    return &cpu_list[id];
+static inline void idle_loop(){
+    pr_warn("cpu idle");
+    while (1){
+        WAITING_INT;
+    }
 }
 
 void process_init(){
@@ -39,7 +41,10 @@ void process_init(){
         process_list[i].kstack = KERNEL_STACK(i);
         process_list[i].state = PROC_UNUSED;
         process_list[i].pid = i;
+        spinlock_init(&process_list[i].lock);
     }
+    idle_process = create_user_process((u64)idle_loop);
+    current_process = idle_process;
 }
 
 pt_t create_process_page(Process *p){
@@ -72,19 +77,19 @@ page_table_free:
  * 创建一个进程
  * 该程序会关闭中断，防止其他线程切换和抢占
  */
-Process *create_user_process() {
+Process *create_user_process(u64 pc) {
     int idx = -1;
 
-    critical_enter();
     for (int i = 0; i < PROCESS_MAX_COUNT; i ++){
+        spinlock_acquire(&process_list[i].lock);
         if (process_list[i].state == PROC_UNUSED){
             idx = i;
             break;
         }
+        spinlock_release(&process_list[i].lock);
     }
     
     if (idx == -1) goto return_null;
-    
     // 1. init 
     Process* p = &process_list[idx];
     p->state = PROC_READY; // 进程状态
@@ -101,14 +106,18 @@ Process *create_user_process() {
     // 4. update context
     memset(&(p->context), 0, sizeof(ThreadCtx));
     p->context.sp = p->kstack + PAGE_SIZE;
+    p->context.ra = (u64)pc;
 
-    critical_exit();
+    // 5. user_trap_handler
+    p->trap_frame_page->user_trap_function = (u64)user_trap_handler;
+    
+    spinlock_release(&process_list[idx].lock);
     return p;
 
 free_trap_frame_page:
     kfree(p->trap_frame_page);
 return_null:
-    critical_exit();
+    spinlock_release(&process_list[idx].lock);
     return NULL;
 }
 
@@ -117,25 +126,89 @@ return_null:
  */
 void free_user_process(Process* p){
     p->state = PROC_UNUSED;
-    process_free_page_table(p);
-    kfree(p->trap_frame_page);
-    p->trap_frame_page = NULL;
 
-    kfree(p->page_table);
+    process_free_page_table(p);
     p->page_table = NULL;
+    p->trap_frame_page = NULL;
     
     p->alloc_page_count = 0;
 }
 
-void yield(void){
+/*
+ * 找到空闲进程并且上锁
+ * 需要调用 spinlock_release 对进程解锁
+ */
+Process* find_process(){
+    int idx = (current_process->pid + 1) % PROCESS_MAX_COUNT;
 
+    for (int i = 0; i < PROCESS_MAX_COUNT; i ++, idx = (idx + 1) % PROCESS_MAX_COUNT){
+        if (idx == 0) continue; // 跳过空闲进程
+        spinlock_acquire(&process_list[idx].lock);
+        if (process_list[idx].state == PROC_READY){
+            return &process_list[idx];
+        }
+        spinlock_release(&process_list[idx].lock);
+    }
+
+    spinlock_acquire(&idle_process->lock);
+    return idle_process;
 }
 
-void schedule(){
-    critical_enter();
-    while (1){
+/*
+ * 进程让出
+ */
+void yield(void){
+    Process *proc = find_process();
 
+    if (proc == current_process){
+        pr_debug("Do not change the current process");
+        spinlock_release(&proc->lock);
+        return;
     }
-    critical_exit();
+
+    current_process = proc;
+    spinlock_release(&proc->lock);
+
+    switch_ctx(&current_process->context, &proc->context);
+}
+
+// void schedule(){
+//     Process *p;
+//     Cpu *cpu = get_cpu();
+//
+//     while (1){
+//         interrupt_on();
+//         pr_debug("schedule interrupt on and off"); // TODO: just for test
+//         interrupt_off();
+//
+//         int idx = -1;
+//         for (int i = 0; i < PROCESS_MAX_COUNT; i ++){
+//             spinlock_acquire(&process_list[i].lock);
+//             if (process_list[i].state == PROC_READY){
+//                 p = &process_list[i];
+//                 idx = i;
+//
+//                 p->state = PROC_RUNNING;
+//                 cpu->proc = p;
+//
+//                 switch_ctx(&p->context, &cpu->context);
+//
+//                 get_cpu()->enable_intr = false; // 强制关闭中断
+//
+//             }
+//             cpu->enable_intr = true;
+//             spinlock_release(&process_list[i].lock);
+//         }
+//
+//         if (idx == -1){
+//             WAITING_INT;
+//             continue;
+//         }
+//
+//     }
+// }
+
+void print_process(Process *p){
+    pr_debug("pid = %d", p->pid);
 }
 

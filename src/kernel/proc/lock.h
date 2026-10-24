@@ -1,15 +1,17 @@
 #pragma once
 #include "kernel/lib/def.h"
-#include "kernel/proc/process.h"
 
 /* 自旋锁 */
 typedef struct {
-    u32 lock;
-    Cpu *cpu;
-    char *name;      // debug
+    i32 locked;
 } SpinLock;
+
+#define SPINLOCK_GLOBAL_INIT(lock) SpinLock lock = {.locked = 0}
 
 void critical_enter();
 void critical_exit();
-void get_spin_lock();
-void 
+
+void spinlock_init(SpinLock* lk);
+void spinlock_acquire(SpinLock *lk);
+bool spinlock_try_acquire(SpinLock *lk);
+void spinlock_release(SpinLock *lk);

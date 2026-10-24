@@ -12,7 +12,6 @@
 
 /* static global function */
 #define EXTERN_SYMBOL(s) extern char s[];
-
 /* cpu 核心数量 */
 #define CPU_NUMBER 1
 

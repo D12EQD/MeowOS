@@ -209,11 +209,11 @@ void kernel_page_init(){
  */
 u64 vaddr_to_paddr(pt_t page_table, u64 vaddr){
     if (vaddr >= MAX_VADDR){
-        // prln_debug("out of range");
+        // pr_debug("out of range");
         return 0;
     }
     if (GET_VA_RESERVE(vaddr)){
-        // prln_debug("virtual address error");
+        // pr_debug("virtual address error");
         return 0;
     }
     
@@ -233,7 +233,7 @@ u64 vaddr_to_paddr(pt_t page_table, u64 vaddr){
 
     return (u64)pt + GET_VA_OFFSET(vaddr);
 failed:
-    prln_debug("physical address get failed\n");
+    pr_debug("physical address get failed\n");
     return 0;
 }
 

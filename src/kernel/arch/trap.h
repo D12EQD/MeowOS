@@ -22,14 +22,12 @@ static inline u64 interrupt_off() {
 // is interrupt ?
 static inline bool is_enable_interrupt(u64 *ret){
     u64 x = READ_CSR(CSR_SSTATUS);
-    *ret = x;
+    if (ret) *ret = x;
     return (x & SSTATUS_SIE) == 0;
 }
 
 static inline bool is_disable_interrupt(u64 *ret){
     u64 x = READ_CSR(CSR_SSTATUS);
-    *ret = x;
+    if (ret) *ret = x;
     return (x & SSTATUS_SIE) != 0;
 }
-
-

@@ -321,7 +321,7 @@ void kernel_fdt_init(void *fdt_address, BootInfo *boot_info) {
 
         if (fdt_streq(name, "cpus")) {
             if (fdt_prop_get_u32(&tree, n, "timebase-frequency", &(boot_info->timebase_frequency))){
-                prln_info("freq is %u", boot_info->timebase_frequency);
+                pr_info("freq is %u", boot_info->timebase_frequency);
             }
         }
 

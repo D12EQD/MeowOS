@@ -15,7 +15,6 @@ enum DeviceTrapType{
 #define is_timer_interrupt(x) (x == 0x8000000000000005UL)
 
 int dev_interrupt();
-bool is_interrupt();
 void trap_init();
 
 void trap_init(){
@@ -36,16 +35,16 @@ void kernel_trap_handler(){
         PANIC("kernel_trap_handler: not from supervisor mode");
     }
 
-    if (is_interrupt() == false){ // 如果不允许中断
+    if (is_disable_interrupt(NULL)){ // 如果不允许中断
         PANIC("kernel_trap_handler: interrupts not enabled");
     }
     
     u64 device_from = dev_interrupt();
-    prln_debug("kernel trap for cause = %lx, pc = %lx, status = %lx", scause, k_pc, sstatus);
+    pr_debug("kernel trap for cause = %lx, pc = %lx, status = %lx, stval = %lx", scause, k_pc, sstatus, stval);
 
     switch (device_from) {
         case DevcieTimer:
-            prln_debug("timer");
+            pr_debug("timer");
             yield(); // 切换进程
             break;
         default:
@@ -67,7 +66,7 @@ void user_trap_handler() {
     }
 
     WRITE_CSR(CSR_STVEC, (u64)kernel_trap_entry);
-    prln_debug("kernel trap for cause = %lx, pc = %lx, status = %lx", scause, user_pc, sstatus);
+    pr_debug("user trap for cause = %lx, pc = %lx, status = %lx, stval = %lx", scause, user_pc, sstatus, stval);
 }
 
 /*

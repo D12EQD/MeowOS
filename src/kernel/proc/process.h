@@ -1,6 +1,8 @@
 #pragma once
 #include "kernel/arch/trap.h"
+#include "kernel/proc/lock.h"
 #include "kernel/mm/page.h"
+
 #include "kernel/lib/def.h"
 
 #define PROCESS_MAX_COUNT 64       // 最大进程数量
@@ -71,6 +73,7 @@ typedef struct __attribute__((packed)) {
 
 typedef struct{
     int pid;                    // 进程 ID
+    SpinLock lock;              // lock
     pt_t page_table;            // page table 页表
     enum proc_state state;      // 进程状态
     TrapFrame* trap_frame_page; // 陷入的保存栈帧
@@ -84,10 +87,14 @@ typedef struct {
     Process *proc;              // 同上
     ThreadCtx context;          // 同上
     u64 interrput_depth;        // 关中断深度
-    u64 old_sie;                // 老sie
+    bool enable_intr;           // 老sie
 }Cpu;
+
+void process_init();
+
+Process *create_user_process(u64 pc);
 
 void yield();
 void schedule();
-Process *create_user_process();
-Cpu* get_cpu();
+
+void print_process(Process *p);
