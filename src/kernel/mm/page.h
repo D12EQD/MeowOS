@@ -75,9 +75,8 @@ void free_walk(pt_t page_table, int depth);
 void* kernel_alloc_page_table();
 void* user_alloc_page_table();
 
+u64 user_map_pages(pt_t page_table, u64 vaddr, u64 count, u64 perm);
 void user_unmap_pages(pt_t page_table, u64 start, u64 page_count, bool is_free);
-
-
 void kernel_page_open();
 u64 vaddr_to_paddr(pt_t page_table, u64 vaddr);
 

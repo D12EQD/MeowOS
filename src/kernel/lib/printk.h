@@ -1,4 +1,5 @@
 #pragma once
+#include "kernel/arch/trap.h"
 #include "kernel/arch/def.h"
 #include "kernel/lib/def.h"
 
@@ -30,6 +31,7 @@ void set_print_filter(u64 new_level);
 void puts(char *s);
 
 #define PANIC(fmt, ...) do {                                        \
+    interrupt_off();                                                \
     pr_error("Kernel Panic for the reason : " fmt, ##__VA_ARGS__);  \
     while (1);                                                      \
 } while (0)

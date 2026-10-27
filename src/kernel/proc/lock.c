@@ -2,9 +2,8 @@
 #include "kernel/arch/def.h"
 
 #include "kernel/proc/lock.h"
-#include "kernel/proc/process.h" 
 
-Cpu cpu;
+CpuLock cpu; // 管理该cpu互斥资源
 
 /* 进入关中断临界区 */
 void critical_enter(){
@@ -37,9 +36,10 @@ void critical_exit(){
     }
 }
 
-void spinlock_init(SpinLock* lk){
+void spinlock_init(SpinLock* lk, const char *name){
     critical_enter();
     lk->locked = 0; 
+    lk->name = name;
     critical_exit();
 }
 
@@ -56,13 +56,26 @@ void spinlock_acquire(SpinLock *lk) {
     }
 }
 
-/* 尝试获取自旋锁 */
+/* 
+ * 尝试获取自旋锁的值，如果发现可以获取到锁则一直等待 (乐观锁的思想)
+ * 如果结果为false 不需要调用 spinlock_release 释放锁，失败时不会获取锁
+ */
 bool spinlock_try_acquire(SpinLock *lk) {
     critical_enter();
-    if (__atomic_exchange_n(&lk->locked, 1, __ATOMIC_ACQUIRE) == 0)
-        return true;
-    critical_exit();
-    return false;
+
+    bool ok = __atomic_load_n(&lk->locked,  __ATOMIC_ACQUIRE);
+
+    if (ok){
+        critical_exit();
+        return false;
+    }
+
+    while (__atomic_exchange_n(&lk->locked, 1, __ATOMIC_ACQUIRE) != 0){
+        critical_exit();
+        critical_enter();
+    }
+
+    return true;
 }
 
 /* 释放自旋锁 */
@@ -72,3 +85,7 @@ void spinlock_release(SpinLock *lk) {
     critical_exit();
 }
 
+void spinlock_debug(SpinLock *lk){
+    if (lk->name) pr_cont_debug("%s : ", lk->name);
+    pr_debug("The locked of lock is %u", lk->locked);
+}

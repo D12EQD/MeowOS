@@ -309,7 +309,7 @@ int printk(KernelPrintLevel level, const char *fmt, ...){
 
 /*
  * 设置需要屏蔽的输出内容等级
- * 比如 set_print_filter(K_INFO | K_WARNING) 可以屏蔽这两个输出等级
+ * 比如 set_print_filter "(K_INFO | K_WARNING)" 可以屏蔽这两个输出等级
  */
 void set_print_filter(u64 new_level){
     print_filter_level = new_level;

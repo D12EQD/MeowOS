@@ -12,9 +12,15 @@
 #define QEMU "qemu-system-riscv64"
 #define LINK_FILE "src/kernel/kernel.ld"
 
-/* output */
-#define KERNEL_ELF "build/bin/kernel.elf"
-#define KERNEL_MAP "build/kernel.map"
+#define KERNEL_ELF  "build/bin/kernel.elf"
+#define KERNEL_MAP  "build/kernel.map"
+#define KERNEL_SRC  "src/kernel"
+
+#define USER_SRC    "src/user"
+#define USER_OBJ    "src/kernel/user.o"     /* 最终存放在 src/kernel/ 文件夹下 */
+#define USER_LD     "src/user/user.ld"
+#define USER_ELF    "build/bin/user.elf"
+#define USER_BIN    "build/bin/user.bin"
 
 /* global variable */
 #define C_FLAG_COUNT sizeof(C_FLAG)/sizeof(C_FLAG[0])
@@ -30,7 +36,6 @@ const char *C_FLAG[] = {
     "-Isrc",
     "-mcmodel=medany",
     "-c",
-    /* NOTE: AI说要加，可疑 */
     "-march=rv64gc",
     "-mabi=lp64d", 
 };
@@ -99,7 +104,7 @@ static bool compile_obj_file(Nob_Walk_Entry entry){
         if (!nob_sv_chop_suffix(&path, nob_sv_from_cstr(".c"))) return true;
         
         // 暂存
-        sprintf(temp, "%s%.*s.o\0", obj_dir, (int)path.count, path.data);
+        sprintf(temp, "%s%.*s.o", obj_dir, (int)path.count, path.data);
 
         // 启动编译
         build_add_c_to_obj(&cmd, origin.data, temp);
@@ -112,7 +117,7 @@ static bool compile_obj_file(Nob_Walk_Entry entry){
         if (!nob_sv_chop_suffix(&path, nob_sv_from_cstr(".S"))) return true;
         
         // 暂存
-        sprintf(temp, "%s%.*s.o\0", obj_dir, (int)path.count, path.data);
+        sprintf(temp, "%s%.*s.o", obj_dir, (int)path.count, path.data);
 
         // 启动编译
         build_add_asm_to_obj(&cmd, origin.data, temp);
@@ -122,7 +127,7 @@ static bool compile_obj_file(Nob_Walk_Entry entry){
     return true;
 }
 
-static bool find_obj_file(Nob_Walk_Entry entry){
+static bool nob_find_obj_file(Nob_Walk_Entry entry){
     if (entry.type != NOB_FILE_REGULAR) return true;
     Nob_String_View path = nob_sv_from_cstr(entry.path);
     
@@ -134,14 +139,12 @@ static bool find_obj_file(Nob_Walk_Entry entry){
 }
 
 
-/* 构架elf文件 */
-void build_elf_file(const char *obj_dir){
-    struct BuildCtx ctx = {
-        .obj_dir = obj_dir,
-        .src_dir = NULL
-    };
-
-    nob_walk_dir(obj_dir, find_obj_file, .data = &ctx);
+/*
+ * 遍历该文件夹下的目录
+ * 将所有目标文件加入obj_file
+ */
+void add_obj_file(const char *obj_dir){
+    nob_walk_dir(obj_dir, nob_find_obj_file);
 }
 
 
@@ -160,9 +163,6 @@ void build_object_file(const char *src_dir, const char *obj_dir) {
     nob_walk_dir(src_dir, compile_obj_file, .data = &ctx);
 }
 
-
-
-/* function */
 bool notice(const char *color, const char *message) {
     nob_log(NOB_INFO, "%s============== %s ==============%s\n", color, message, ANSI_RESET);
     return false;
@@ -186,6 +186,42 @@ void build_add_asm_to_obj(Nob_Cmd *cmd_ptr, const char *input, const char *outpu
     nob_cmd_append(cmd_ptr, input, "-o", output);
 }
 
+/*
+ * 用户代码构建函数
+ * args:
+ *      input_dir 输出文件夹
+ *      obj_dir 存放目标文件的文件夹
+ *      result_obj_path 最后将所有目标文件导出的最终路径
+ */
+void main_build_user(const char *input_dir, const char *obj_dir){
+    // 1. 编译目标文件
+    build_object_file(input_dir, obj_dir);
+
+    // 2. 构建elf
+    add_obj_file(obj_dir);
+    
+    nob_cmd_append(&cmd, CC);
+    for (int i = 0; i < LD_FLAG_COUNT; i ++){
+        nob_cmd_append(&cmd, LD_FLAG[i]);
+    }
+    for (int i = 0; i < obj_file.count; i ++){
+        nob_cmd_append(&cmd, obj_file.items[i]);
+    }
+
+    nob_cmd_append(&cmd, "-Wl,-T", USER_LD, "-o", USER_ELF);
+    build_run(&cmd);
+    
+    // 3. 生成 raw binary -- user.bin
+    nob_cmd_append(
+        &cmd, 
+        "riscv64-linux-gnu-objcopy", 
+        "-O", "binary", 
+        USER_ELF, USER_BIN
+    );
+    build_run(&cmd);
+}
+
+
 /* 
  * 主构建函数 
  * args:
@@ -204,11 +240,11 @@ void main_build(bool is_debug, int argc, char ** argv){
 
     
     // object file and code file from the same dir
-    const char * dir = "src";
 
     notice(ANSI_GREEN, "Compiling source files...");
 
     if (argc > 0){
+        const char * dir = KERNEL_SRC;
         // 如果有输入参数，则根据输入参数的目录编译
         Nob_String_View str_src = nob_sv_from_cstr(dir);
         for (int i = 0; i < argc; i ++){
@@ -221,13 +257,16 @@ void main_build(bool is_debug, int argc, char ** argv){
             }
         }
     }else{
-        build_object_file(dir, dir);
+        build_object_file(KERNEL_SRC, KERNEL_SRC);
     }
+    
+    // 同时编译用户代码为目标文件
+    main_build_user(USER_SRC, USER_SRC);
 
     notice(ANSI_GREEN, "Linking kernel...");
 
     // 2. 编译
-    build_elf_file(dir);
+    add_obj_file(KERNEL_SRC);
 
     // 3. 链接阶段
     nob_cmd_append(&cmd, CC);
@@ -238,7 +277,7 @@ void main_build(bool is_debug, int argc, char ** argv){
         "-o", KERNEL_ELF
     );
 
-    // 加入目标为输入文件
+    // 4. 加入目标为输入文件
     for (int i = 0; i < obj_file.count; i ++){
         nob_cmd_append(&cmd, obj_file.items[i]);
     }
@@ -262,7 +301,7 @@ void main_clean(int argc, char **argv){
         .src_dir = NULL
     };
 
-    nob_walk_dir("src", find_obj_file, .data = &ctx); 
+    nob_walk_dir("src", nob_find_obj_file, .data = &ctx); 
     if (obj_file.count == 0){
         nob_log(NOB_WARNING, "no obj file\n");
         return;

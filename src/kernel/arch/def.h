@@ -12,6 +12,7 @@
 
 /* static global function */
 #define EXTERN_SYMBOL(s) extern char s[];
+#define EXTERN_FUNC(func) func
 /* cpu 核心数量 */
 #define CPU_NUMBER 1
 
@@ -27,7 +28,6 @@
 #define CSR_STIMECMP    "stimecmp"
 #define CSR_TIME        "time"
 #define CSR_SIE         "sie"
-
 
 
 #ifndef _ASM

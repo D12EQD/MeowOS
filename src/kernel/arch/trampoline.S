@@ -23,9 +23,9 @@ user_trap_entry:
         # each process has a separate p->trapframe memory area,
         # but it's mapped to the same virtual address
         # (TRAMPOLINE_VADDR) in every process's user page table.
-        li a0, TRAMPOLINE_VADDR
+        li a0, TRAPFRAME_VADDR
         
-        # save the user registers in TRAMPOLINE_VADDR
+        # save the user registers in TRAPFRAME_VADDR
         sd ra, 40(a0)
         sd sp, 48(a0)
         sd gp, 56(a0)
@@ -81,12 +81,13 @@ user_trap_entry:
         # flush now-stale user entries from the TLB.
         sfence.vma zero, zero
 
-        # call user_trap()
+        # call user_trap_function, such as user_trap_handler
         jalr t0
 
+# user_trap_ret(satp);
 .globl user_trap_ret
 user_trap_ret:
-        # user_trap() returns here, with user satp in a0.
+        # user_trap_ret returns here, with user satp in a0.
         # return from kernel to user.
         # flush icache, in case this is the first time
         # we're running this proc on this hart.
@@ -97,9 +98,9 @@ user_trap_ret:
         csrw satp, a0
         sfence.vma zero, zero
 
-        li a0, TRAMPOLINE_VADDR
+        li a0, TRAPFRAME_VADDR
 
-        # restore all but a0 from TRAMPOLINE_VADDR
+        # restore all but a0 from TRAPFRAME_VADDR
         ld ra, 40(a0)
         ld sp, 48(a0)
         ld gp, 56(a0)

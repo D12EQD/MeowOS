@@ -77,24 +77,22 @@ typedef struct{
     pt_t page_table;            // page table 页表
     enum proc_state state;      // 进程状态
     TrapFrame* trap_frame_page; // 陷入的保存栈帧
-    u64 kstack;                 // 栈指针
+    u64 kstack_bottom;          // 栈指针
     u64 alloc_page_count;       // 已经分配的页面数量
     ThreadCtx context;          // 线程上下文
 }Process;
 
-// Per-CPU state.
-typedef struct {
-    Process *proc;              // 同上
-    ThreadCtx context;          // 同上
-    u64 interrput_depth;        // 关中断深度
-    bool enable_intr;           // 老sie
-}Cpu;
+extern Process *current_process;
 
 void process_init();
 
-Process *create_user_process(u64 pc);
+Process *create_kernel_process(u64 pc);
+Process *create_user_process();
+pt_t create_user_process_page(Process *p);
 
 void yield();
 void schedule();
 
-void print_process(Process *p);
+void process_debug(Process *p);
+void fork_ret();
+void scheduler(void);

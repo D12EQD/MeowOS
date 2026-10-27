@@ -40,27 +40,10 @@ void kernel_init(u64 fdt_address){
     kernel_page_init();
     kernel_page_open();
     process_init();
-    timer_init(&boot_info);
-}
 
-void delay(){
-    for (int i = 0; i < 3e7; i ++){
-        _ASM("nop");
-    }
-}
-
-void process_A(void){
-    while (1){
-        pr_info("A");
-        delay();
-    }
-}
-
-void process_B(void){
-    while (1){
-        pr_info("B");
-        delay();
-    }
+    // last 开中断
+    // timer_init(&boot_info);
+    // interrupt_on();
 }
 
 void kernel_start(){
@@ -71,24 +54,32 @@ void kernel_start(){
         : "=r"(hartid), "=r"(fdt_address)
     );
     WRITE_REG(tp, hartid);
-    kernel_init(fdt_address);    
+    kernel_init(fdt_address);
     kernel_main();
 }
 
 void kernel_main(){
-    u64 start_mm = 0x80200000;
-    u64 end_mm = (u64)__free_ram_end;
-
-    for (u64 i = start_mm; i < end_mm; i += PAGE_SIZE / 2){
+    // set_print_filter(K_DEBUG);
+    pr_debug("hello world\n");
+    Process* proc = create_user_process();
+    
+    // testing
+    u64 temp = READ_CSR(CSR_SATP);
+    pr_debug("kernel level-2 page_table in page %lx, the true page_table is %lx", temp, kernel_page_table);
+    for (u64 i = 0x80201c3aUL; i <= 0x80201ca2UL; i ++){
         if (i != vaddr_to_paddr(kernel_page_table, i)){
-            pr_debug("address error %lx", i); while(1);
+            PANIC("page error");
         }
     }
-    pr_debug("hello world\n");
+    for (u64 i = 0x802013b0UL; i <= 0x8020140aUL; i ++){
+        if (i != vaddr_to_paddr(kernel_page_table, i)){
+            PANIC("page error");
+        }
+    }
 
-    Process* pa = create_user_process((u64)process_A);
-    Process* pb = create_user_process((u64)process_B);
+    pr_cont_debug("create this user process : ");
+    process_debug(proc);
     
-    process_A();
-    while (1);
+    scheduler();
+    PANIC("process error");
 }

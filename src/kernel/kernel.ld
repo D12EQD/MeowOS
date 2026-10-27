@@ -1,3 +1,4 @@
+OUTPUT_ARCH(riscv)
 ENTRY(boot) /*  ELF 的入口点是符号 boot */
 
 SECTIONS {
