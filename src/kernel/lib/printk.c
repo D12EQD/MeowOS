@@ -13,6 +13,12 @@ void puts(char *s){
     }
 }
 
+void puts_n(char *s, u64 count){
+    for (u64 i = 0; i < count; i ++){
+        sbi_console_putchar(s[i]);
+    }
+}
+
 static int skip_atoi(const char **s){
     int i = 0;
 

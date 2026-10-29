@@ -27,11 +27,13 @@ static inline void process_free_page_table(Process* p){
     user_unmap_pages(p->page_table, TRAPFRAME_VADDR, 1, true);
     user_unmap_pages(p->page_table, TRAMPOLINE_VADDR, 1, true);
     user_unmap_pages(p->page_table, USER_VADDR_START, p->alloc_page_count, true);
+    user_unmap_pages(p->page_table, PROCESS_STACK_PAGE_START, PROCESS_STACK_PAGE_COUNT, true);
     free_walk(p->page_table, 2);
 }
 
 void create_idle_process(){
     // 0 号为空闲进程
+    // TODO : 该进程需要做更多事情
     current_process = &process_list[0];
     current_process->state = PROC_READY;
     current_process->pid = 0;
@@ -40,6 +42,7 @@ void create_idle_process(){
 void process_init(){
     for (u64 i = 0; i < PROCESS_MAX_COUNT; i ++) {
         process_list[i].state = PROC_UNUSED;
+        process_list[i].kstack_bottom = KERNEL_STACK(i); // 该地址已经被内核代码映射完毕
         process_list[i].pid = i;
     }
     create_idle_process();
@@ -48,50 +51,69 @@ void process_init(){
 /* 创建用户进程页表 */
 pt_t create_user_process_page(Process *p){
     pt_t page_table = user_alloc_page_table(); // user alloc page table 不一定成功
-    bool ret = 0;
-
     if (!page_table) goto page_table_free;
-    
-    // 1. 3 个重要页面
-    ret = mappages(page_table, TRAMPOLINE_VADDR, 1, (u64)trampoline, PTE_R | PTE_X);
-    if (!ret) goto trampoline_free;
-    
-    ret = mappages(page_table, TRAPFRAME_VADDR, 1, (u64)(p->trap_frame_page), PTE_R | PTE_W);
-    if (!ret) goto trapframe_free;
-    
-    // TODO : alloc kernel_page to user space
-    // // stack
-    p->kstack_bottom = KERNEL_STACK(p->pid);
-    ret = mappages(page_table, p->kstack_bottom, 1, p->kstack_bottom, PTE_R | PTE_W);
 
-    // pr_debug("process kernel stack : paddr = %lx, vaddr = %lx", p->kstack_bottom, stack_page);
+    // 对于固定的代码段或者数据段，使用 mappages 分配，该代码不会调用页面分配算法
+    // 对于动态的数据段，使用 user_map_pages 分配，该代码会调用页面分配算法
 
-    // 2. 复制用户程序到真实物理空间
-    u64 page_count = _binary_user_bin_end - _binary_user_bin_start + PAGE_SIZE - 1;
-    page_count /= PAGE_SIZE;
+    // 1. trampoline（内核/用户共享）
+    if (!mappages(page_table, TRAMPOLINE_VADDR, 1, (u64)trampoline, PTE_R | PTE_X))
+        goto trampoline_free;
+
+    // 2. trapframe
+    p->trap_frame_page = kalloc_page();
+    if (!p->trap_frame_page) goto trampoline_free;
+    memset((void *)p->trap_frame_page, 0, PAGE_SIZE);
+
+    if (!mappages(page_table, TRAPFRAME_VADDR, 1, (u64)p->trap_frame_page, PTE_R | PTE_W)) {
+        kfree(p->trap_frame_page);
+        p->trap_frame_page = NULL;
+        goto trampoline_free;
+    }
     
-    ASSERT(page_count == user_map_pages(page_table, USER_VADDR_START, page_count, PTE_R | PTE_X));
-    for (u64 i = 0, va = USER_VADDR_START; i < page_count; i ++, va += PAGE_SIZE){
-        u64 pa = vaddr_to_paddr(page_table, va); // 通过虚拟地址找到物理地址
-                                                 // 注意内核的虚拟地址和物理地址等价
-        memcpy((void *)pa, _binary_user_bin_start + i * PAGE_SIZE, PAGE_SIZE);
+    // 3. 用户程序
+    u64 page_count = (_binary_user_bin_end - _binary_user_bin_start + PAGE_SIZE - 1) / PAGE_SIZE;
+    if (page_count != user_map_pages(page_table, USER_VADDR_START, page_count, PTE_R | PTE_X)){
+        goto trapframe_free;
     }
 
+    // 复制用户程序到用户页表映射到的物理页
+    u64 total = (u64)_binary_user_bin_end - (u64)_binary_user_bin_start;
+    u64 src  = (u64)_binary_user_bin_start;
+    u64 dst_va = USER_VADDR_START;
+    while (total > 0) {
+        u64 n = (total > PAGE_SIZE) ? PAGE_SIZE : total;
+        u64 dst_pa = vaddr_to_paddr(page_table, dst_va);
+        if (!dst_pa) goto user_free;
+        memcpy((void *)dst_pa, (void *)src, n);
+        src += n;
+        dst_va += n;
+        total -= n;
+    }
     p->alloc_page_count += page_count;
+
+    // 4. 用户栈
+    if (user_map_pages(
+         page_table, 
+         PROCESS_STACK_PAGE_START,
+         PROCESS_STACK_PAGE_COUNT, 
+         PTE_R | PTE_W
+    ) != PROCESS_STACK_PAGE_COUNT ){
+        goto user_free;
+    }
 
     return page_table;
 
-    // 注意需要释放及时最后没有分配成功，因为需要释放分配过程中被分配的其他页表
-kstack_free:
-    user_unmap_pages(page_table, p->kstack_bottom, 1, true);
+// stack_free:
+    user_unmap_pages(page_table, PROCESS_STACK_PAGE_START, PROCESS_STACK_PAGE_COUNT, true);
+user_free:
+    user_unmap_pages(page_table, USER_VADDR_START, page_count, true);
 trapframe_free:
     user_unmap_pages(page_table, TRAPFRAME_VADDR, 1, true);
 trampoline_free:
-    user_unmap_pages(page_table, TRAMPOLINE_VADDR, 1, true);
+    user_unmap_pages(page_table, TRAMPOLINE_VADDR, 1, false);
 page_table_free:
-    if (page_table){
-        free_walk(page_table, 2);
-    }
+    if (page_table) free_walk(page_table, 2);
     return NULL;
 }
 
@@ -115,16 +137,11 @@ Process *create_user_process() {
     p->state = PROC_READY; // 进程状态
     p->alloc_page_count = 0;
     
-    // 2. alloc tram frame
-    p->trap_frame_page = kalloc_page();
-    memset((void *)p->trap_frame_page, 0, PAGE_SIZE);
-    if (!p->trap_frame_page) goto return_null;
-    
-    // 3. create page_table for this process
+    // 2. create page_table for this process
     p->page_table = create_user_process_page(p);
     if (!p->page_table) goto free_trap_frame_page;
     
-    // 4. update context
+    // 3. update context
     memset(&(p->context), 0, sizeof(ThreadCtx));
     p->context.ra = (u64)fork_ret;
     p->context.sp = p->kstack_bottom + PAGE_SIZE;

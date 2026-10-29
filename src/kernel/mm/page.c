@@ -8,20 +8,6 @@
 #include "kernel/lib/printk.h"
 #include "kernel/lib/string.h"
 
-#define GET_VA_OFFSET(va)       __get_bit(va, 0, 11)
-#define GET_VA_VPN0(va)         __get_bit(va, 12, 20)
-#define GET_VA_VPN1(va)         __get_bit(va, 21, 29)
-#define GET_VA_VPN2(va)         __get_bit(va, 30, 38)
-#define GET_VA_VPN(va, level)   __get_bit(va, 12 + PAGE_VADD_LV * level, 12 + PAGE_VADD_LV * level + 8)
-
-#define GET_VA_RESERVE(va)      __get_bit(va, 39, 63)
-
-#define GET_PAGEADD(va)         ( ( va ) >> PAGE_SIZE_LOG2 << PAGE_SIZE_LOG2)
-
-#define PADDR_TO_PTE(pa)         ( (pte_t)((((u64)pa) >> 12) << 10) )
-#define PTE_TO_PADDR(pte)        ( (pt_t)(((pte) >> 10) << 12) )
-
-
 EXTERN_SYMBOL(__start_text_section);
 EXTERN_SYMBOL(__end_text_section);
 
@@ -128,16 +114,11 @@ void free_walk(pt_t page_table, int depth){
 
     for (u64 i = 0; i < PAGE_SIZE / sizeof(pte_t); i ++){
         pte_t pte = (pte_t)page_table[i];
-        if (pte & PTE_V){
-            if unlikely(pte & (PTE_R | PTE_W | PTE_X)){ 
-                // is a page_table but do not unmap
-                PANIC("error page");
-            }else{
-                // is a page_table, dfs......
-                pt_t child_page_table = (pt_t) PTE_TO_PADDR(pte);
-                free_walk(child_page_table, depth - 1);
-                page_table[i] = 0;
-            }
+        if ((pte & PTE_V) && (pte & (PTE_R | PTE_W | PTE_X)) == 0) {
+            pt_t pt = PTE_TO_PADDR(pte);
+            free_walk(pt, depth - 1);
+        } else if (pte & PTE_V) {
+            PANIC("free_walk: leaf");
         }
     }
 
@@ -161,7 +142,7 @@ bool mappages(pt_t page_table, u64 va, u64 page_count, u64 paddr, u64 permit_fla
         pte = walk(page_table, true, vaddr);
 
         if (pte == NULL) return false;
-        if unlikely(*pte & PTE_V) PANIC("mappages: remap");
+        if unlikely(*pte & PTE_V) PANIC("mappages: remap %lx", PTE_TO_PADDR(*pte));
 
         *pte = PADDR_TO_PTE(paddr) | permit_flag | PTE_V;
     }
@@ -214,6 +195,7 @@ void kernel_page_init(){
         (u64)__trampoline_section_start, PTE_R | PTE_X
     );
 
+    // NOTE: 内核栈对于用户是固定地址
     // 为每一个进程分配一个内核栈
     for (u64 i = 0; i < PROCESS_MAX_COUNT; i ++){
         void * page = kalloc_page();
@@ -230,21 +212,17 @@ void kernel_page_init(){
  */
 u64 vaddr_to_paddr(pt_t page_table, u64 vaddr){
     if (vaddr >= MAX_VADDR){
-        // pr_debug("out of range");
         return 0;
     }
     if (GET_VA_RESERVE(vaddr)){
-        // pr_debug("virtual address error");
         return 0;
     }
     
     pt_t pt = page_table;
-    // pr_debug("vaddr = "); print_vaddr(vaddr); pr_debug("\n");
 
     for (int level = 2; level >= 0; level --){
         pte_t* next = &pt[GET_VA_VPN(vaddr, level)];
         
-        // print_pte(*next); pr_debug("\n");
         if (*next & PTE_V){
             pt = PTE_TO_PADDR(*next);
         }else{
@@ -254,12 +232,11 @@ u64 vaddr_to_paddr(pt_t page_table, u64 vaddr){
 
     return (u64)pt + GET_VA_OFFSET(vaddr);
 failed:
-    pr_debug("physical address get failed\n");
     return 0;
 }
 
 /*
- * 为用户分配 count 个页面
+ * 为用户分b count 个页面
  * args:
  *      page_table : 用户level-2页表
  *      vaddr : 需要映射到的虚拟地址
@@ -276,7 +253,7 @@ u64 user_map_pages(pt_t page_table, u64 vaddr, u64 count, u64 perm){
         void *new = kalloc_page();
         if (!new) break;
         // 防御一下 防止调用者没用使用 PTE_U
-        if (mappages(page_table, vaddr, 1, (u64)new, PTE_U | perm) == false) break; 
+        if (mappages(page_table, vaddr + PAGE_SIZE * i, 1, (u64)new, PTE_U | perm) == false) break; 
         res ++;
     }
 

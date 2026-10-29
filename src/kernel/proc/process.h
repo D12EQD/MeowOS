@@ -4,8 +4,12 @@
 #include "kernel/mm/page.h"
 
 #include "kernel/lib/def.h"
+#include "kernel/mm/def.h"
 
 #define PROCESS_MAX_COUNT 4       // 最大进程数量
+#define PROCESS_STACK_PAGE_COUNT 4
+#define PROCESS_STACK_PAGE_START (KERNEL_STACK(PROCESS_MAX_COUNT) - 3 * PAGE_SIZE)
+#define PROCESS_STACK_PAGE_END (PROCESS_STACK_PAGE_START + PAGE_SIZE * PROCESS_STACK_PAGE_COUNT)
 
 enum proc_state{
     PROC_UNUSED,    // 未使用的进程控制结构

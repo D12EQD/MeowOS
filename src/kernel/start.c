@@ -41,9 +41,8 @@ void kernel_init(u64 fdt_address){
     kernel_page_open();
     process_init();
 
-    // last 开中断
     // timer_init(&boot_info);
-    // interrupt_on();
+    interrupt_on();
 }
 
 void kernel_start(){
@@ -64,8 +63,6 @@ void kernel_main(){
     Process* proc = create_user_process();
     
     // testing
-    u64 temp = READ_CSR(CSR_SATP);
-    pr_debug("kernel level-2 page_table in page %lx, the true page_table is %lx", temp, kernel_page_table);
     for (u64 i = 0x80201c3aUL; i <= 0x80201ca2UL; i ++){
         if (i != vaddr_to_paddr(kernel_page_table, i)){
             PANIC("page error");

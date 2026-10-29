@@ -2,7 +2,7 @@
 #include "kernel/arch/timer.h"
 
 #include "kernel/proc/process.h"
-#include "kernel/syscall/syscall.h"
+
 #include "kernel/lib/printk.h"
 
 /*
@@ -89,12 +89,12 @@ u64 user_trap_handler() {
         case 5: // scheduler interrupt
             break;
         case 8: // syscall 
-            syscall();
             break;
-        case 9: // external interrupt, such as ip packet coming
+        case 9: // external interrupt
             break;
-        case 13: // page fault
-        case 15: // page fault
+        case 13: // page error
+            break;
+        case 15: // page error
             break;
         default:
             PANIC("user_trap_handler : unknow trap");
@@ -102,6 +102,7 @@ u64 user_trap_handler() {
 
     process_prepare_return_user();
     u64 satp = MAKE_SATP(p->page_table);
+
     return satp;
 }
 
@@ -127,23 +128,24 @@ int dev_interrupt() {
 void process_prepare_return_user(){
     // 更新中断向量寄存器为 user_trap_entry 
     // 马上需要进入用户态了
-    u64 trap_entry = TRAMPOLINE_VADDR + ((u64)user_trap_ret - (u64)trampoline);
+    u64 trap_entry = TRAMPOLINE_VADDR + ((u64)user_trap_entry - (u64)trampoline);
     WRITE_CSR(CSR_STVEC, trap_entry);
 
     Process *p = current_process;
-    p->trap_frame_page->kernel_hartid= 0; // 单核 
-                                          //
-    p->trap_frame_page->sp = (
-        p->trap_frame_page->kernel_sp = p->kstack_bottom + PAGE_SIZE
-    );
+    p->trap_frame_page->kernel_hartid= 0; // 单核
+ 
+    // 内核栈和用户栈共享数据
+    p->trap_frame_page->sp          = PROCESS_STACK_PAGE_END;
+    p->trap_frame_page->kernel_sp   = p->kstack_bottom + PAGE_SIZE;
 
     p->trap_frame_page->user_trap_function = (u64)user_trap_entry;
     p->trap_frame_page->kernel_satp = READ_CSR(CSR_SATP);
+
     p->trap_frame_page->epc = USER_VADDR_START;
-    
-    CLEAN_CSR(CSR_SSTATUS, SSTATUS_SPP);    // 开启用户中断许可
-    WRITE_CSR(CSR_SEPC, p->trap_frame_page->epc);
     interrupt_on();
+
+    WRITE_CSR(CSR_SEPC, p->trap_frame_page->epc);
+    CLEAN_CSR(CSR_SSTATUS, SSTATUS_SPP);    // 开启用户中断许可
 }
 
 /* 
@@ -151,17 +153,19 @@ void process_prepare_return_user(){
  * 当切换上下文的时候，cpu立刻执行该函数
  */
 void fork_ret(void) {
-    Process* p = current_process;
-    // process_debug(p);
-    // spinlock_release(&p->lock);
-
     process_prepare_return_user();
     void (*trap_ret)(u64) = (void *)(
         TRAMPOLINE_VADDR + ((u64)user_trap_ret - (u64)trampoline)
     );
 
-    trap_frame_debug(p->trap_frame_page);
+    pr_debug("\n");
+    trap_frame_debug(current_process->trap_frame_page);
+    pr_debug("\n");
+
 
     // 执行 user_trap_ret，保存上下文，进入用户程序
-    trap_ret(MAKE_SATP(p->page_table));
+    u64 atp = MAKE_SATP(current_process->page_table);
+    pr_debug("satp is 0x%lx", atp);
+
+    trap_ret(atp);
 }

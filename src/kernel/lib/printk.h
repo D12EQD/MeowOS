@@ -29,6 +29,7 @@ int printk(KernelPrintLevel level, const char *fmt, ...);
 
 void set_print_filter(u64 new_level);
 void puts(char *s);
+void puts_n(char *s, u64 count);
 
 #define PANIC(fmt, ...) do {                                        \
     interrupt_off();                                                \

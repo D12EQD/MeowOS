@@ -24,12 +24,15 @@ enum SystemCall {
 SYSCALL_LIST(__SYSCALL_DECL)
 #undef __SYSCALL_DECL
 
+
 /* 名字表 */
 #define __SYSCALL_NAME(upper, lower) [SYS_##upper] = #lower,
 static const char *const syscall_name[] = {
     SYSCALL_LIST(__SYSCALL_NAME)
 };
 #undef __SYSCALL_NAME
+
+typedef u64 (*syscall_fn_t)(void);
 
 void syscall();
 

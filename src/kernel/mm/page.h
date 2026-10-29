@@ -50,6 +50,21 @@ Sv39 的虚拟地址
 #define PTE_A   (1UL << 6) // accessed
 #define PTE_D   (1UL << 7) // dirty
 
+
+#define GET_VA_OFFSET(va)       __get_bit(va, 0, 11)
+#define GET_VA_VPN0(va)         __get_bit(va, 12, 20)
+#define GET_VA_VPN1(va)         __get_bit(va, 21, 29)
+#define GET_VA_VPN2(va)         __get_bit(va, 30, 38)
+#define GET_VA_VPN(va, level)   __get_bit(va, 12 + PAGE_VADD_LV * level, 12 + PAGE_VADD_LV * level + 8)
+
+#define GET_VA_RESERVE(va)      __get_bit(va, 39, 63)
+
+#define GET_PAGEADD(va)         ( ( va ) >> PAGE_SIZE_LOG2 << PAGE_SIZE_LOG2)
+
+#define PADDR_TO_PTE(pa)         ( (pte_t)((((u64)pa) >> 12) << 10) )
+#define PTE_TO_PADDR(pte)        ( (pt_t)(((pte) >> 10) << 12) )
+
+
 #define PAGE_VADD_LV 9
 
 typedef u64 pte_t;     // 页表项
