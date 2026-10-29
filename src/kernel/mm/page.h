@@ -52,17 +52,6 @@ Sv39 的虚拟地址
 
 #define PAGE_VADD_LV 9
 
-#define GET_VA_OFFSET(va)       __get_bit(va, 0, 11)
-#define GET_VA_VPN0(va)         __get_bit(va, 12, 20)
-#define GET_VA_VPN1(va)         __get_bit(va, 21, 29)
-#define GET_VA_VPN2(va)         __get_bit(va, 30, 38)
-#define GET_VA_VPN(va, level)   __get_bit(va, 12 + PAGE_VADD_LV * level, 12 + PAGE_VADD_LV * level + 8)
-
-#define GET_VA_RESERVE(va)      __get_bit(va, 39, 63)
-
-#define PADDR_TO_PTE(pa)         ( (pte_t)((((u64)pa) >> 12) << 10) )
-#define PTE_TO_PADDR(pte)        ( (pt_t)(((pte) >> 10) << 12) )
-
 typedef u64 pte_t;     // 页表项
 typedef pte_t* pt_t;   // 页表
 
@@ -79,6 +68,9 @@ u64 user_map_pages(pt_t page_table, u64 vaddr, u64 count, u64 perm);
 void user_unmap_pages(pt_t page_table, u64 start, u64 page_count, bool is_free);
 void kernel_page_open();
 u64 vaddr_to_paddr(pt_t page_table, u64 vaddr);
+
+i64 copy_from_user(pt_t page_table, void *dst, void* src_user, u64 len);
+i64 copy_to_user(pt_t page_table, u64 dst_user, char *src, u64 len);
 
 extern pt_t kernel_page_table; /* 内核页目录 */
 

@@ -3,7 +3,7 @@
 #include "kernel/lib/def.h"
 #include "kernel/arch/def.h"
 
-void user_trap_handler();
+u64 user_trap_handler();
 void kernel_trap_handler();
 void trap_init();
 

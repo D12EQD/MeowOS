@@ -1,6 +1,0 @@
-#define _GNU_SOURCE
-#define NOB_IMPLEMENTATION
-#define NOB_WARN_DEPRECATED
-#define NOB_EXPERIMENTAL_DELETE_OLD
-
-#include <nob.h>

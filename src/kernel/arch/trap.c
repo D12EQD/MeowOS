@@ -2,7 +2,7 @@
 #include "kernel/arch/timer.h"
 
 #include "kernel/proc/process.h"
-
+#include "kernel/syscall/syscall.h"
 #include "kernel/lib/printk.h"
 
 /*
@@ -24,6 +24,7 @@ enum DeviceTrapType{
 
 int dev_interrupt();
 void trap_init();
+void process_prepare_return_user();
 
 void trap_init(){
     WRITE_CSR(CSR_STVEC, (u64)kernel_trap_entry); // 设置中断向量地址
@@ -52,7 +53,7 @@ void kernel_trap_handler(){
     switch (device_from) {
         case DevcieTimer:
             pr_debug("timer");
-            yield(); // 切换进程
+            timer_interrupt();
             break;
     }
 
@@ -62,7 +63,7 @@ void kernel_trap_handler(){
 /* 
  * 用户程序异常处理程序
  */ 
-void user_trap_handler() {
+u64 user_trap_handler() {
     pr_debug("user_trap_handler start");
     u64 scause = READ_CSR(CSR_SCAUSE);
     u64 stval = READ_CSR(CSR_STVAL);
@@ -73,13 +74,35 @@ void user_trap_handler() {
     if ((sstatus & SSTATUS_SPP) == 1){ // from kernel 
         PANIC("user_trap_handler : not from supervisor mode");
     }
-
-    WRITE_CSR(CSR_STVEC, (u64)kernel_trap_entry);
+    
+    // 中断向量更新为 kernel_trap_entry
+    // 我们已经在内核态了
+    u64 trap_entry = (u64)kernel_trap_entry;
+    WRITE_CSR(CSR_STVEC, (u64)trap_entry);
     
     Process *p = current_process;
-    p->trap_frame_page->epc = READ_CSR(CSR_SEPC);
+    p->trap_frame_page->epc = READ_CSR(CSR_SEPC); // 更新返回地址
     
-    PANIC("user_trap_handler : unknow trap");
+    switch (scause){
+        case 1: // software interrupt
+            break;
+        case 5: // scheduler interrupt
+            break;
+        case 8: // syscall 
+            syscall();
+            break;
+        case 9: // external interrupt, such as ip packet coming
+            break;
+        case 13: // page fault
+        case 15: // page fault
+            break;
+        default:
+            PANIC("user_trap_handler : unknow trap");
+    }
+
+    process_prepare_return_user();
+    u64 satp = MAKE_SATP(p->page_table);
+    return satp;
 }
 
 /*
@@ -102,18 +125,25 @@ int dev_interrupt() {
  * 调用该操作需要关闭中断，否则可能会出现错误
  */
 void process_prepare_return_user(){
-    u64 tp_user_entry = TRAMPOLINE_VADDR + ((u64)user_trap_ret - (u64)trampoline);
-    WRITE_CSR(CSR_STVEC, tp_user_entry);
+    // 更新中断向量寄存器为 user_trap_entry 
+    // 马上需要进入用户态了
+    u64 trap_entry = TRAMPOLINE_VADDR + ((u64)user_trap_ret - (u64)trampoline);
+    WRITE_CSR(CSR_STVEC, trap_entry);
 
     Process *p = current_process;
     p->trap_frame_page->kernel_hartid= 0; // 单核 
-    p->trap_frame_page->kernel_sp = p->kstack_bottom;
+                                          //
+    p->trap_frame_page->sp = (
+        p->trap_frame_page->kernel_sp = p->kstack_bottom + PAGE_SIZE
+    );
+
     p->trap_frame_page->user_trap_function = (u64)user_trap_entry;
     p->trap_frame_page->kernel_satp = READ_CSR(CSR_SATP);
-
-    SET_CSR(CSR_SSTATUS, SSTATUS_SPIE);
-    CLEAN_CSR(CSR_SSTATUS, SSTATUS_SPP);
+    p->trap_frame_page->epc = USER_VADDR_START;
+    
+    CLEAN_CSR(CSR_SSTATUS, SSTATUS_SPP);    // 开启用户中断许可
     WRITE_CSR(CSR_SEPC, p->trap_frame_page->epc);
+    interrupt_on();
 }
 
 /* 
@@ -121,15 +151,17 @@ void process_prepare_return_user(){
  * 当切换上下文的时候，cpu立刻执行该函数
  */
 void fork_ret(void) {
-    pr_debug("fork_ret start");
     Process* p = current_process;
+    // process_debug(p);
     // spinlock_release(&p->lock);
 
     process_prepare_return_user();
-    u64 satp = MAKE_SATP(p->page_table);
-    u64 temp = TRAMPOLINE_VADDR + ((u64)user_trap_ret - (u64)trampoline);
-    void (*user_trap_ret_ptr)(u64) = (void *)temp;
+    void (*trap_ret)(u64) = (void *)(
+        TRAMPOLINE_VADDR + ((u64)user_trap_ret - (u64)trampoline)
+    );
 
-    // 执行 user_trap_ret ，保存上下文
-    user_trap_ret_ptr(satp);
+    trap_frame_debug(p->trap_frame_page);
+
+    // 执行 user_trap_ret，保存上下文，进入用户程序
+    trap_ret(MAKE_SATP(p->page_table));
 }

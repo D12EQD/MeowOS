@@ -3,19 +3,25 @@
 #include "kernel/lib/printk.h"
 #include "kernel/arch/sbi.h"
 
-void *memcpy(void *dst, const void *src, size_t n) {
+u64 memcpy(void *dst, const void *src, size_t n) {
     u8 *d = (u8 *) dst;
     const u8 *s = (const u8 *) src;
-    while (n--)
+    u64 res = 0;
+    while (n--){
         *d++ = *s++;
-    return dst;
+        res ++;
+    }
+    return res;
 }
 
-void *memset(void *buf, char c, size_t n) {
+u64 memset(void *buf, char c, size_t n) {
     u8 *p = (u8 *) buf;
-    while (n--)
+    u64 res = 0;
+    while (n --){
         *p++ = c;
-    return buf;
+        res ++;
+    }
+    return res;
 }
 
 size_t strnlen(const char * s, size_t limit){

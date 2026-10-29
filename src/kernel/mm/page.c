@@ -8,6 +8,20 @@
 #include "kernel/lib/printk.h"
 #include "kernel/lib/string.h"
 
+#define GET_VA_OFFSET(va)       __get_bit(va, 0, 11)
+#define GET_VA_VPN0(va)         __get_bit(va, 12, 20)
+#define GET_VA_VPN1(va)         __get_bit(va, 21, 29)
+#define GET_VA_VPN2(va)         __get_bit(va, 30, 38)
+#define GET_VA_VPN(va, level)   __get_bit(va, 12 + PAGE_VADD_LV * level, 12 + PAGE_VADD_LV * level + 8)
+
+#define GET_VA_RESERVE(va)      __get_bit(va, 39, 63)
+
+#define GET_PAGEADD(va)         ( ( va ) >> PAGE_SIZE_LOG2 << PAGE_SIZE_LOG2)
+
+#define PADDR_TO_PTE(pa)         ( (pte_t)((((u64)pa) >> 12) << 10) )
+#define PTE_TO_PADDR(pte)        ( (pt_t)(((pte) >> 10) << 12) )
+
+
 EXTERN_SYMBOL(__start_text_section);
 EXTERN_SYMBOL(__end_text_section);
 
@@ -22,13 +36,13 @@ EXTERN_SYMBOL(__free_ram_end);
 
 pt_t kernel_page_table; /* 内核页目录 */
 
-static inline void print_pte(pte_t pte){
-    pr_debug("%lx %b", PTE_TO_PADDR(pte), (pte & 0b1111111111));
-}
-
-static inline void print_vaddr(u64 vaddr){
-    pr_debug("%lx %lx %lx %lx", GET_VA_VPN2(vaddr), GET_VA_VPN1(vaddr), GET_VA_VPN0(vaddr), GET_VA_OFFSET(vaddr));
-}
+// static inline void print_pte(pte_t pte){
+//     pr_debug("%lx %b", PTE_TO_PADDR(pte), (pte & 0b1111111111));
+// }
+//
+// static inline void print_vaddr(u64 vaddr){
+//     pr_debug("%lx %lx %lx %lx", GET_VA_VPN2(vaddr), GET_VA_VPN1(vaddr), GET_VA_VPN0(vaddr), GET_VA_OFFSET(vaddr));
+// }
 
 static inline void flush_TLB(){
     _ASM("sfence.vma zero, zero" ::: "memory");
@@ -51,7 +65,7 @@ void* kernel_alloc_page_table(){
 
 void *user_alloc_page_table(){
     void *res = kalloc_page();
-    if (!res) return NULL;
+    if unlikely(!res) return NULL;
     memset(res, 0, PAGE_SIZE);
     return res;
 }
@@ -70,10 +84,10 @@ void *user_alloc_page_table(){
  * 0..11 -- 12 bits of byte offset within the page.
  */
 pte_t* walk(pt_t page_table, bool is_alloc, u64 vaddr){
-    if (vaddr >= MAX_VADDR){
+    if unlikely(vaddr >= MAX_VADDR){
         PANIC("out of range");
     }
-    if (GET_VA_RESERVE(vaddr)){
+    if unlikely(GET_VA_RESERVE(vaddr)){
         PANIC("virtual address error");
     }
     
@@ -105,24 +119,24 @@ failed:
 
 
 /* 
- * 递归释放页表和页表项上的数据
+ * 递归释放页表和页表项上的数据，叶子页必须要全部 unmap
  * depth 指定最大的递归层数 如果为负数会一直dfs
  * 一般用于用户页释放，比如释放用户进程的空间时
  */
 void free_walk(pt_t page_table, int depth){
-    if (depth == 0){
-        return;
-    }
+    if (depth == 0) return;
 
     for (u64 i = 0; i < PAGE_SIZE / sizeof(pte_t); i ++){
         pte_t pte = (pte_t)page_table[i];
         if (pte & PTE_V){
-            if (pte & (PTE_R | PTE_W | PTE_X)){ // is a page_table
+            if unlikely(pte & (PTE_R | PTE_W | PTE_X)){ 
+                // is a page_table but do not unmap
+                PANIC("error page");
+            }else{
+                // is a page_table, dfs......
                 pt_t child_page_table = (pt_t) PTE_TO_PADDR(pte);
                 free_walk(child_page_table, depth - 1);
                 page_table[i] = 0;
-            }else{
-                PANIC("error page");
             }
         }
     }
@@ -173,15 +187,7 @@ void kernel_page_init(){
         (u64)__end_text_section - (u64)__start_text_section, 
         (u64)__start_text_section, PTE_R | PTE_X
     );
-
-    // 分配 trampoline
-    kernel_mappages(
-        kernel_page_table, 
-        TRAMPOLINE_VADDR,
-        (u64)__trampoline_section_end - (u64)__trampoline_section_start,
-        (u64)__trampoline_section_start, PTE_R | PTE_X
-    );
-    
+ 
     // 分配只读区域
     kernel_mappages(
         kernel_page_table,
@@ -196,9 +202,24 @@ void kernel_page_init(){
         (u64)__free_ram_end - (u64)__free_ram,
         (u64)__free_ram, PTE_R | PTE_W
     );
+
+    // NOTE : 此处是重要设计决策
+    // TRAMPOLINE_VADDR，用户和内核指向的地址一致
+
+    // 分配 trampoline
+    kernel_mappages(
+        kernel_page_table, 
+        TRAMPOLINE_VADDR,
+        (u64)__trampoline_section_end - (u64)__trampoline_section_start,
+        (u64)__trampoline_section_start, PTE_R | PTE_X
+    );
+
+    // 为每一个进程分配一个内核栈
+    for (u64 i = 0; i < PROCESS_MAX_COUNT; i ++){
+        void * page = kalloc_page();
+        kernel_mappages(kernel_page_table, KERNEL_STACK(i), PAGE_SIZE, (u64)page, PTE_R | PTE_W);
+    }
 }
-
-
 
 /*
  * 根据虚拟地址和 level-2页表 找到物理地址
@@ -278,7 +299,7 @@ void user_unmap_pages(pt_t page_table, u64 start, u64 page_count, bool is_free){
             continue;
         }
 
-        if (*pte & PTE_V){
+        if (!(*pte & PTE_V)){
             pr_warn("vaddr %lu is not a vaild address in this page_table\n", i);
             continue;
         }
@@ -293,3 +314,21 @@ void user_unmap_pages(pt_t page_table, u64 start, u64 page_count, bool is_free){
     }
 }
 
+/* 
+ * 从用户地址拷到内核 
+ *  returns:
+ *      >= 0 拷贝的数据大小
+ *      -1 用户针不正确
+ */
+i64 copy_from_user(pt_t page_table, void *dst, void* src_user, u64 len){
+    u64 src = vaddr_to_paddr(page_table, (u64)src_user);
+    if unlikely(src == 0) return -1;
+    return memcpy(dst, (void *)src, len);
+}
+
+/* 从内核拷到用户地址 */
+i64 copy_to_user(pt_t page_table, u64 dst_user, char *src, u64 len){
+    u64 dst = vaddr_to_paddr(page_table, (u64)dst_user);
+    if unlikely(dst == 0) return -1;
+    return memcpy((void *)dst, src, len);
+}

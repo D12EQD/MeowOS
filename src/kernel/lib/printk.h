@@ -36,4 +36,4 @@ void puts(char *s);
     while (1);                                                      \
 } while (0)
 
-#define ASSERT(cond) do{ if (!( cond )){ PANIC( "assert error " __FILE__ ":%lu", __LINE__); } }while(0)
+#define ASSERT(cond) do{ if unlikely(!( cond )){ PANIC( "assert error " __FILE__ ":%lu", __LINE__); } }while(0)

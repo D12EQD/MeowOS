@@ -5,7 +5,7 @@
 
 #include "kernel/lib/def.h"
 
-#define PROCESS_MAX_COUNT 64       // 最大进程数量
+#define PROCESS_MAX_COUNT 4       // 最大进程数量
 
 enum proc_state{
     PROC_UNUSED,    // 未使用的进程控制结构
@@ -93,6 +93,8 @@ pt_t create_user_process_page(Process *p);
 void yield();
 void schedule();
 
-void process_debug(Process *p);
 void fork_ret();
 void scheduler(void);
+
+void process_debug(Process *p);
+void trap_frame_debug(TrapFrame *tf);
