@@ -1,8 +1,8 @@
 OUTPUT_ARCH(riscv)
-ENTRY(boot) /*  ELF 的入口点是符号 boot */
+ENTRY(boot)
 
 SECTIONS {
-    /* OpenSBI 之后内核加载到 0x80200000 */
+    /* SBI 之后内核加载到 0x80200000 */
     . = 0x80200000;
     
     .text :{
@@ -43,7 +43,7 @@ SECTIONS {
     /* stack area */
     .stack : ALIGN(16) {
         __stack_bottom = .;
-        . += 128 * 1024; /* 128KB */
+        . += 64 * 1024; /* 128KB */
         __stack_top = .;
     }
     . = ALIGN(0x1000);

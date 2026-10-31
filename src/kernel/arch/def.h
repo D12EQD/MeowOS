@@ -17,9 +17,7 @@
 #define CPU_NUMBER 1
 
 /* csr function and define */
-
-
-#define CSR_SATP        "satp"      // a table ?
+#define CSR_SATP        "satp"
 #define CSR_SCAUSE      "scause"
 #define CSR_SEPC        "sepc"
 #define CSR_SSTATUS     "sstatus"
@@ -28,7 +26,6 @@
 #define CSR_STIMECMP    "stimecmp"
 #define CSR_TIME        "time"
 #define CSR_SIE         "sie"
-
 
 #ifndef _ASM
 #define _ASM __asm__ __volatile__
@@ -105,6 +102,8 @@
             : "memory");                                \
         __tmp;                                          \
     })
+
+
 
 // 等待中断，关闭自己
 #define WAITING_INT { _ASM("wfi"); }

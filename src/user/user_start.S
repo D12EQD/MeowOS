@@ -4,7 +4,6 @@ _start:
     la a0, msg
     li a1, 16
     li a7, 1
-    ecall
 _loop:
     j _loop
 
