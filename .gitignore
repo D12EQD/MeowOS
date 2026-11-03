@@ -2,6 +2,8 @@ build/bin
 build/firmware
 build/kernel.map
 build/main
+build/makeheaders
+
 kernel.map
 
 doc/
