@@ -57,12 +57,30 @@ void syscall(){
     }
 }
 
+u64 sys_getpid(void){
+    return current_process->pid;
+}
+
+u64 sys_mmap(void){
+    
+}
+
+u64 sys_unmmap(void){
+
+}
+
+u64 sys_exit(void) {
+    u64 return_val = get_arg(0);
+    return return_val;
+}
+
+u64 sys_wait(void) { 
+
+    return 0; 
+}
+
 u64 sys_read(void)   { return 0; }
 u64 sys_open(void)   { return 0; }
 u64 sys_close(void)  { return 0; }
 u64 sys_fstat(void)  { return 0; }
 u64 sys_exec(void)   { return 0; }
-u64 sys_wait(void)   { return 0; }
-u64 sys_exit(void)   { return 0; }
-u64 sys_getpid(void) { return 0; }
-u64 sys_sbrk(void)   { return 0; }

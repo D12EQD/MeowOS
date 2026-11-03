@@ -79,11 +79,13 @@ typedef struct __attribute__((packed)) {
 typedef struct __Process{
     int pid;                    // 进程 ID
     SpinLock lock;              // lock
-    pt_t page_table;            // page table 页表
     enum proc_state state;      // 进程状态
+
+    pt_t page_table;            // page table 页表
     TrapFrame* trap_frame_page; // 陷入的保存栈帧
     u64 kstack_bottom;          // 栈指针
-    u64 alloc_page_count;       // 已经分配的页面数量 不包括栈 trap_frame_page kernel_stack_page
+
+    u64 alloc_sz;               // 分配的页面数量 不包括栈 trap_frame_page kernel_stack_page
     ThreadCtx context;          // 线程上下文
     struct __Process * father;  // 父进程
     const char * name;          // debug name

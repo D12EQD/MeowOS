@@ -27,8 +27,3 @@
 
 /* function */
 #define MAKE_SATP(page) ((8L << 60) | (((u64)page) >> 12))
-
-
-
-
-

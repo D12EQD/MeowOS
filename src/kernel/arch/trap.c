@@ -88,9 +88,9 @@ u64 user_trap_handler() {
             // pr_debug("syscall");
             syscall();
             break;
-        case 13: // page error
-            break;
-        case 15: // page error
+        case 13: // page_fault
+        case 15: // page_fault
+            // page_fault();
             break;
         default:
             switch (dev_interrupt()) {

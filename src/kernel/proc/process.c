@@ -26,7 +26,7 @@ Process *current_process;
 static inline void process_free_page_table(Process* p){
     user_unmap_pages(p->page_table, TRAPFRAME_VADDR, 1, true);
     user_unmap_pages(p->page_table, TRAMPOLINE_VADDR, 1, false);
-    user_unmap_pages(p->page_table, USER_VADDR_START, p->alloc_page_count, true);
+    user_unmap_pages(p->page_table, USER_VADDR_START, p->alloc_sz, true);
     user_unmap_pages(p->page_table, PROCESS_STACK_PAGE_START, PROCESS_STACK_PAGE_COUNT, true);
     free_walk(p->page_table, 2);
 }
@@ -145,7 +145,7 @@ pt_t create_user_process_page(Process *p){
         goto stack_free;
     }
 
-    p->alloc_page_count = 0;
+    p->alloc_sz = 0;
 
     return page_table;
 
@@ -186,8 +186,9 @@ bool first_user_init(Process *proc){
     }
 
     proc->trap_frame_page->epc = USER_VADDR_START;
-    proc->alloc_page_count += page_count;
+    proc->alloc_sz += page_count * PAGE_SIZE;
     proc->name = "first_process";
+    proc->father = NULL;
     return true;
 error:
     PANIC("First User error");
@@ -214,7 +215,7 @@ Process *create_user_process() {
     Process *p = &process_list[idx];
 
     p->state = PROC_READY; // 进程状态
-    p->alloc_page_count = 0;
+    p->alloc_sz = 0;
     
     // 2. create page_table for this process
     p->page_table = create_user_process_page(p);
@@ -241,7 +242,7 @@ void free_user_process(Process* p){
     process_free_page_table(p);
     p->page_table = NULL;
     p->trap_frame_page = NULL;
-    p->alloc_page_count = 0;
+    p->alloc_sz = 0;
     p->father = NULL;
 }
 
@@ -331,10 +332,10 @@ i64 kfork(const char * name){
     
     // copy normal page
     // pr_debug("copy normal page");
-    copy_page_table(fa->page_table, p->page_table, fa->alloc_page_count);
+    copy_page_table(fa->page_table, p->page_table, PAGE_UP( fa->alloc_sz ));
 
-    ASSERT(p->alloc_page_count == 0);
-    p->alloc_page_count += fa->alloc_page_count;
+    ASSERT(p->alloc_sz == 0);
+    p->alloc_sz += fa->alloc_sz;
  
     // pr_debug("copy stack");
 
@@ -344,13 +345,11 @@ i64 kfork(const char * name){
         void* ps = (void *)vaddr_to_paddr(p->page_table, va);
         memcpy(fas, ps, PAGE_SIZE);
     }
-    
-    // pr_debug("copy tram_frame_page");
-    // copy tram_frame_page
+ 
     *(p->trap_frame_page) = *(fa->trap_frame_page);
-    
+ 
     p->trap_frame_page->a0 = 0; // 子进程 return 0
-    
+ 
     p->father = fa;
     return p->pid;
 }
@@ -360,3 +359,12 @@ Process * get_proc_from_pid(i64 pid){
     return &process_list[pid];
 }
 
+// u64 kkill(Process *proc){
+//     if (proc->father == NULL){
+//         pr_warn("poweroff!");
+//         interrupt_off();
+//         WAITING_INT;
+//     }
+//
+//
+// }

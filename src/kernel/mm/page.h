@@ -64,9 +64,11 @@ Sv39 的虚拟地址
 
 #define PADDR_TO_PTE(pa)         ( (pte_t)((((u64)pa) >> 12) << 10) )
 #define PTE_TO_PADDR(pte)        ( (pt_t)(((pte) >> 10) << 12) )
-
-
 #define PAGE_VADD_LV 9
+
+#define PAGE_UP(sz)  (((sz) + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1))
+#define PAGE_DOWN(sz) (((sz)) & ~(PAGE_SIZE - 1))
+
 
 typedef u64 pte_t;     // 页表项
 typedef pte_t* pt_t;   // 页表

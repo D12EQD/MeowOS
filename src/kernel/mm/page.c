@@ -169,7 +169,7 @@ void kernel_page_init(){
         (u64)__start_text_section, PTE_R | PTE_X
     );
  
-    // 分配只读区域
+    // 分配bss区域
     kernel_mappages(
         kernel_page_table,
         (u64)__start_other_section,
@@ -259,6 +259,22 @@ u64 user_map_pages(pt_t page_table, u64 vaddr, u64 count, u64 perm){
     return res;
 }
 
+/* 重新分配用户内存，只减少 */
+u64 user_realloc(pt_t page_table, u64 old_size, u64 new_size){
+    if (new_size >= old_size){
+        return old_size;
+    }
+    u64 old_end = PAGE_UP(old_size + USER_VADDR_START);
+    u64 new_end = PAGE_UP(new_size + USER_VADDR_START);
+
+    if (old_end > new_end){
+        u64 count = (old_end - new_end) / PAGE_SIZE;
+        user_unmap_pages(page_table, new_end, count, true);
+    }
+
+    return new_size;
+}
+
 /*
  * 取消映射用户页表
  * is_free 标志是否需要释放页表，调用kfree释放
@@ -290,14 +306,11 @@ void user_unmap_pages(pt_t page_table, u64 start, u64 page_count, bool is_free){
     }
 }
 
-
-
 /* 
  * 复制页表内容给另外一个页表 一般用于 fork
  * returns : bool
  */
 bool copy_page_table(pt_t old, pt_t new, u64 page_count){
-    // 有错误！
     pte_t *pte;
     u64 i;
     u64 new_page;
@@ -335,20 +348,53 @@ err:
 }
 
 /* 
- * 从用户地址拷到内核 
+ * 从用户地址拷到内核
  *  returns:
  *      >= 0 拷贝的数据大小
- *      -1 用户针不正确
+ *      -1 用户指针不正确
  */
-i64 copy_from_user(pt_t page_table, void *dst, void* src_user, u64 len){
-    u64 src = vaddr_to_paddr(page_table, (u64)src_user);
-    if unlikely(src == 0) return -1;
-    return memcpy(dst, (void *)src, len);
+i64 copy_from_user(pt_t page_table, void *dst, void *src_user, u64 len){
+    u64 src = (u64)src_user;
+    u64 dst_addr = (u64)dst;
+    u64 remain = len;
+
+    while (remain > 0){
+        u64 pa = vaddr_to_paddr(page_table, src);
+        if unlikely(pa == 0) return -1;
+
+        u64 chunk = PAGE_SIZE - (src & (PAGE_SIZE - 1));
+        if (chunk > remain) chunk = remain;
+
+        memcpy((void *)dst_addr, (void *)pa, chunk);
+
+        src += chunk;
+        dst_addr += chunk;
+        remain -= chunk;
+    }
+    return (i64)len;
 }
 
-/* 从内核拷到用户地址 */
 i64 copy_to_user(pt_t page_table, u64 dst_user, char *src, u64 len){
-    u64 dst = vaddr_to_paddr(page_table, (u64)dst_user);
-    if unlikely(dst == 0) return -1;
-    return memcpy((void *)dst, src, len);
+    u64 dst = dst_user;
+    u64 src_addr = (u64)src;
+    u64 remain = len;
+
+    while (remain > 0){
+        u64 pa = vaddr_to_paddr(page_table, dst);
+        if unlikely(pa == 0) return -1;
+
+        u64 chunk = PAGE_SIZE - (dst & (PAGE_SIZE - 1));
+        if (chunk > remain) chunk = remain;
+
+        memcpy((void *)pa, (void *)src_addr, chunk);
+
+        dst += chunk;
+        src_addr += chunk;
+        remain -= chunk;
+    }
+    return (i64)len;
+}
+
+i64 sbrk(i64 move){
+    Process *proc = current_process;
 }
