@@ -81,10 +81,12 @@ user_trap_entry:
         # flush now-stale user entries from the TLB.
         sfence.vma zero, zero
 
-        # call user_trap_function, such as user_trap_handler
+        # call user_trap_function
         jalr t0
+        # 执行完成后下一个命令刚好是 user_trap_ret
 
-# user_trap_ret(satp);
+# stap 为用户进程的页表寄存器基地址
+# user_trap_ret(u64 satp);
 .globl user_trap_ret
 user_trap_ret:
         # user_trap_ret returns here, with user satp in a0.

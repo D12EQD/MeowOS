@@ -1,6 +1,7 @@
 #include "kernel/arch/trap.h"
 #include "kernel/arch/timer.h"
 
+#include "kernel/syscall/syscall.h"
 #include "kernel/proc/process.h"
 
 #include "kernel/lib/printk.h"
@@ -80,35 +81,41 @@ u64 user_trap_handler() {
     u64 trap_entry = (u64)kernel_trap_entry;
     WRITE_CSR(CSR_STVEC, (u64)trap_entry);
     
-    Process *p = current_process;
-    p->trap_frame_page->epc = READ_CSR(CSR_SEPC); // 更新返回地址
-    
+    current_process->trap_frame_page->epc = READ_CSR(CSR_SEPC); // 更新返回地址
+
     switch (scause){
         case 1: // software interrupt
             break;
-        case 5: // scheduler interrupt
-            break;
-        case 8: // syscall 
-            break;
-        case 9: // external interrupt
+        case 8: // syscall
+            current_process->trap_frame_page->epc += 4;
+            interrupt_on(); // 开启中断，陷入内核态时会自动关中断
+            pr_debug("syscall");
+            syscall();
             break;
         case 13: // page error
             break;
         case 15: // page error
             break;
         default:
-            PANIC("user_trap_handler : unknow trap");
+            switch (dev_interrupt()) {
+                case DevcieTimer:
+                    yield();
+                    break;
+                default:
+                    PANIC("Unknow error\n");
+            }
     }
 
     process_prepare_return_user();
-    u64 satp = MAKE_SATP(p->page_table);
-
+    u64 satp = MAKE_SATP(current_process->page_table);
+    
+    // return to trampolite.S 的 user_ret
     return satp;
 }
 
 /*
- * device interrupt 
- * 返回 enum DeviceTrapType
+ * device interrupt
+ * returns: enum DeviceTrapType, error number in this enum too
  */
 int dev_interrupt() {
     u64 scause = READ_CSR(CSR_SCAUSE);
@@ -126,8 +133,7 @@ int dev_interrupt() {
  * 调用该操作需要关闭中断，否则可能会出现错误
  */
 void process_prepare_return_user(){
-    // 更新中断向量寄存器为 user_trap_entry 
-    // 马上需要进入用户态了
+    // 更新中断向量寄存器为 user_trap_entry 需要进入用户态
     u64 trap_entry = TRAMPOLINE_VADDR + ((u64)user_trap_entry - (u64)trampoline);
     WRITE_CSR(CSR_STVEC, trap_entry);
 
@@ -135,13 +141,12 @@ void process_prepare_return_user(){
     p->trap_frame_page->kernel_hartid= 0; // 单核
  
     // 内核栈和用户栈共享数据
-    p->trap_frame_page->sp          = PROCESS_STACK_PAGE_END;
-    p->trap_frame_page->kernel_sp   = p->kstack_bottom + PAGE_SIZE;
+    p->trap_frame_page->sp = PROCESS_STACK_PAGE_END;
+    p->trap_frame_page->kernel_sp = p->kstack_bottom + PAGE_SIZE;
 
-    p->trap_frame_page->user_trap_function = (u64)user_trap_entry;
+    p->trap_frame_page->user_trap_function = (u64)user_trap_handler;
     p->trap_frame_page->kernel_satp = READ_CSR(CSR_SATP);
 
-    p->trap_frame_page->epc = USER_VADDR_START;
     interrupt_on();
 
     WRITE_CSR(CSR_SEPC, p->trap_frame_page->epc);
@@ -153,6 +158,7 @@ void process_prepare_return_user(){
  * 当切换上下文的时候，cpu立刻执行该函数
  */
 void fork_ret(void) {
+    current_process->trap_frame_page->epc = USER_VADDR_START;
     process_prepare_return_user();
     void (*trap_ret)(u64) = (void *)(
         TRAMPOLINE_VADDR + ((u64)user_trap_ret - (u64)trampoline)
@@ -162,9 +168,9 @@ void fork_ret(void) {
     trap_frame_debug(current_process->trap_frame_page);
     pr_debug("\n");
 
-
     // 执行 user_trap_ret，保存上下文，进入用户程序
     u64 atp = MAKE_SATP(current_process->page_table);
+
     pr_debug("satp is 0x%lx", atp);
 
     trap_ret(atp);

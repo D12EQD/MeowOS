@@ -8,8 +8,8 @@
 
 #define PROCESS_MAX_COUNT 4       // 最大进程数量
 #define PROCESS_STACK_PAGE_COUNT 4
-#define PROCESS_STACK_PAGE_START (KERNEL_STACK(PROCESS_MAX_COUNT) - 3 * PAGE_SIZE)
-#define PROCESS_STACK_PAGE_END (PROCESS_STACK_PAGE_START + PAGE_SIZE * PROCESS_STACK_PAGE_COUNT)
+#define PROCESS_STACK_PAGE_END (KERNEL_STACK(PROCESS_MAX_COUNT) - 3 * PAGE_SIZE)
+#define PROCESS_STACK_PAGE_START (PROCESS_STACK_PAGE_END - PAGE_SIZE * PROCESS_STACK_PAGE_COUNT)
 
 enum proc_state{
     PROC_UNUSED,    // 未使用的进程控制结构
@@ -98,7 +98,7 @@ void yield();
 void schedule();
 
 void fork_ret();
-void scheduler(void);
+[[noreturn]] void scheduler(void);
 
 void process_debug(Process *p);
 void trap_frame_debug(TrapFrame *tf);

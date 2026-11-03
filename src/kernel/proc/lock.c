@@ -28,7 +28,8 @@ void critical_exit(){
         PANIC("critical_exit error : interrput_depth");
     }
     
-    // 如果可以所有进程或线程退出临界区并且可以开启中断
+    // 如果可以所有进程或线程退出临界区
+    // 并且上次的中断是开启的
     // 就开启中断
     if (cpu.interrput_depth == 0 && cpu.enable_intr){
         cpu.enable_intr = 0;

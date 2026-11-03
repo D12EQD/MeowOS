@@ -247,33 +247,33 @@ u64 fdt_prop_u64(const FdtTree *t, fdt_off_t prop, u64 def) {
 }
 
 /* 属性值是否为单个 NUL 结尾的可打印字符串 */
-static inline int fdt_val_is_string(const u8 *v, u32 len) {
-    if (!len || v[len - 1] != 0) return 0;
-    for (u32 i = 0; i < len - 1; i++)
-        if (v[i] && (v[i] < 0x20 || v[i] > 0x7e)) return 0;
-    return 1;
-}
+// static inline int fdt_val_is_string(const u8 *v, u32 len) {
+//     if (!len || v[len - 1] != 0) return 0;
+//     for (u32 i = 0; i < len - 1; i++)
+//         if (v[i] && (v[i] < 0x20 || v[i] > 0x7e)) return 0;
+//     return 1;
+// }
 
 /* 取字符串属性，含 NULL 拷贝到 buf */
-static inline bool fdt_prop_copy_str(
-    const FdtTree *t, 
-    fdt_off_t node, 
-    const char *prop_name, 
-    char *buf, 
-    u32 buf_size
-){
-    fdt_off_t p = fdt_prop_by_name(t, node, prop_name);
-    if (p == FDT_OFF_NONE) return false;
-
-    const u8 *v = fdt_prop_value(t, p);
-    u32 len = fdt_prop_len(t, p);
-    if (!v || !len || !fdt_val_is_string(v, len)) return true;
-
-    u32 n = (len < buf_size) ? len : buf_size - 1;
-    memcpy(buf, v, n); /* 字符串就是字节流，大小端无关 */
-    buf[n] = '\0';
-    return false;
-}
+// static inline bool fdt_prop_copy_str(
+//     const FdtTree *t, 
+//     fdt_off_t node, 
+//     const char *prop_name, 
+//     char *buf, 
+//     u32 buf_size
+// ){
+//     fdt_off_t p = fdt_prop_by_name(t, node, prop_name);
+//     if (p == FDT_OFF_NONE) return false;
+//
+//     const u8 *v = fdt_prop_value(t, p);
+//     u32 len = fdt_prop_len(t, p);
+//     if (!v || !len || !fdt_val_is_string(v, len)) return true;
+//
+//     u32 n = (len < buf_size) ? len : buf_size - 1;
+//     memcpy(buf, v, n); /* 字符串就是字节流，大小端无关 */
+//     buf[n] = '\0';
+//     return false;
+// }
 
 /* 取 u32 属性 */
 static inline bool fdt_prop_get_u32(
@@ -293,21 +293,21 @@ static inline bool fdt_prop_get_u32(
 }
 
 /* 取 u64 属性 */
-static inline bool fdt_prop_get_u64(
-    const FdtTree *t, 
-    fdt_off_t node, 
-    const char *prop_name, 
-    u64 *out
-){
-    fdt_off_t p = fdt_prop_by_name(t, node, prop_name);
-    if (p == FDT_OFF_NONE) return false;
-
-    const u8 *v = fdt_prop_value(t, p);
-    if (!v || fdt_prop_len(t, p) != 8) return false;
-
-    *out = fdt_be64(v);
-    return true;
-}
+// static inline bool fdt_prop_get_u64(
+//     const FdtTree *t, 
+//     fdt_off_t node, 
+//     const char *prop_name, 
+//     u64 *out
+// ){
+//     fdt_off_t p = fdt_prop_by_name(t, node, prop_name);
+//     if (p == FDT_OFF_NONE) return false;
+//
+//     const u8 *v = fdt_prop_value(t, p);
+//     if (!v || fdt_prop_len(t, p) != 8) return false;
+//
+//     *out = fdt_be64(v);
+//     return true;
+// }
 
 void kernel_fdt_init(void *fdt_address, BootInfo *boot_info) {
     FdtTree tree;

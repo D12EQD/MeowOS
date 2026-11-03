@@ -14,7 +14,7 @@
 #define EXTERN_SYMBOL(s) extern char s[];
 #define EXTERN_FUNC(func) func
 /* cpu 核心数量 */
-#define CPU_NUMBER 1
+#define CPU_COUNT 1
 
 /* csr function and define */
 #define CSR_SATP        "satp"
@@ -103,7 +103,11 @@
         __tmp;                                          \
     })
 
-
-
 // 等待中断，关闭自己
 #define WAITING_INT { _ASM("wfi"); }
+
+#define FW_TEXT_START               0x0
+#define FW_JUMP_OFFSET              0x200000
+#define FW_JUMP_FDT_OFFSET          0x2200000
+#define FW_PAYLOAD_ALIGN            0x200000
+#define FW_PAYLOAD_FDT_OFFSET       0x2200000

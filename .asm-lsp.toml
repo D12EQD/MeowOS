@@ -1,7 +1,7 @@
 [default_config]
-assembler = "fasm"
-instruction_set = "x86/x86-64"
+assembler = "gas"
+instruction_set = "riscv"
 
 [default_config.opts]
-diagnostics = false   # 暂时关闭诊断，后续可开启
-compiler = "fasm" # 指定使用 fasm 编译器
+diagnostics = true
+compiler = "riscv64-linux-gnu-gcc"

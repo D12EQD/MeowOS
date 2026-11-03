@@ -172,7 +172,8 @@ void free_user_process(Process* p){
  * 需要调用 spinlock_release 对进程解锁
  */
 Process* find_ready_process(){
-    int idx = (current_process->pid + 1) % PROCESS_MAX_COUNT;
+    static int idx;
+    idx = (current_process->pid + 1) % PROCESS_MAX_COUNT;
     for (int i = 0; i < PROCESS_MAX_COUNT; i ++, idx = (idx + 1) % PROCESS_MAX_COUNT){
         if (idx == 0) continue; // 优先跳过空闲进程
 
@@ -194,11 +195,19 @@ Process* find_ready_process(){
     return &process_list[0];
 }
 
+
 // Give up the CPU for one scheduling round.
 void yield(void) {
-    Process *p = current_process;
-    p->state = PROC_READY;
-    switch_ctx(&p->context, &current_process->context);
+    Process *old = current_process;
+    current_process = find_ready_process();
+    
+    old->state = PROC_READY;
+    current_process->state = PROC_RUNNING;
+    
+    pr_debug("change the process from pid=%d to pid=%d", old->pid, current_process->pid);
+
+    if (old == current_process) return; // 不切换
+    switch_ctx(&old->context, &current_process->context);
 }
 
 void scheduler(void) {
@@ -207,40 +216,33 @@ void scheduler(void) {
     while (1){
         interrupt_on();
         interrupt_off();
-        
-        bool found = false;
-        int pid;
-        
-        // 跳过空闲进程，找到一个可以执行的合适进程
-        for (pid = 1; pid < PROCESS_MAX_COUNT; pid ++) {
-            p = &process_list[pid];
-            if (p->state == PROC_READY) {
-                pr_cont_debug("current_process is "); process_debug(current_process);
-                p->state = PROC_RUNNING;
-                Process *old = current_process;
 
-                // debug
-                pr_cont_debug("switch to the process : "); process_debug(p);
-
-                current_process = p;
-                switch_ctx(&old->context, &current_process->context);
-
-                found = true;
-            }
-        }
-        if (found == false) {
-            // 空闲
+        p = find_ready_process();
+        if (p == process_list){
             pr_warn("cpu is idle");
             _ASM("wfi");
+        }else{
+            pr_cont_debug("current_process is "); process_debug(current_process);
+            p->state = PROC_RUNNING;
+            Process *old = current_process;
+
+            // debug
+            pr_cont_debug("switch to the process : "); process_debug(p);
+
+            current_process = p;
+            switch_ctx(&old->context, &current_process->context);
         }
     }
 }
 
 void process_debug(Process *p){
     pr_debug("[");
-    pr_debug("  process_debug : pid = %ld", p->pid);
-    pr_debug("  context infomation : ra = %lx, sp = %lx", p->context.ra, p->context.sp);
-    pr_debug("  page_table = %lx, frame_page = %lx", p->page_table, p->trap_frame_page);
+    pr_debug("  process_debug : pid = %d", p->pid);
+    pr_debug("  context infomation : ra = %lx, sp = %lx", 
+        p->context.ra, p->context.sp);
+    pr_debug("  page_table = %lx, frame_page = %lx", 
+        (u64)p->page_table, (u64)p->trap_frame_page
+    );
     pr_debug("]");
 
 }

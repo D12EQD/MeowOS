@@ -25,6 +25,8 @@ EXTERN_SYMBOL( __stack_top);
 EXTERN_SYMBOL( __free_ram);
 EXTERN_SYMBOL( __free_ram_end);
 
+EXTERN_SYMBOL(trampoline);
+
 BootInfo boot_info;
 
 void kernel_main();
@@ -41,7 +43,7 @@ void kernel_init(u64 fdt_address){
     kernel_page_open();
     process_init();
 
-    // timer_init(&boot_info);
+    timer_init(&boot_info);
     interrupt_on();
 }
 
@@ -57,26 +59,37 @@ void kernel_start(){
     kernel_main();
 }
 
+void test_page(Process *proc){
+    for (u64 va = TRAMPOLINE_VADDR , pa = (u64)trampoline, i = 0; i < PAGE_SIZE; i ++, va ++, pa ++){
+        ASSERT(vaddr_to_paddr(kernel_page_table, va) == pa);
+    }
+    
+    for (u64 va = TRAMPOLINE_VADDR , pa = (u64)trampoline, i = 0; i < PAGE_SIZE; i ++, va ++, pa ++){
+        ASSERT(vaddr_to_paddr(proc->page_table, va) == pa);
+    }
+    
+    for (u64 va = TRAPFRAME_VADDR , pa = (u64)(proc->trap_frame_page), i = 0; i < PAGE_SIZE; i ++, va ++, pa ++){
+        ASSERT(vaddr_to_paddr(proc->page_table, va) == pa);
+    }
+
+    pr_debug(
+        "trampoline_vaddr is %lx\ntrapframe_vaddr is %lx\n",
+        TRAMPOLINE_VADDR, TRAPFRAME_VADDR
+    );
+
+    pr_debug("kernel_stack_page_start is %lx\n", KERNEL_STACK(0));
+    pr_debug("kernel_stack_page_end is %lx\n", KERNEL_STACK(PROCESS_MAX_COUNT));
+
+    pr_debug("process_stack_page_start is %lx\n", PROCESS_STACK_PAGE_START);
+    pr_debug("process_stack_page_end is %lx\n", PROCESS_STACK_PAGE_END);
+}
+
 void kernel_main(){
     // set_print_filter(K_DEBUG);
     pr_debug("hello world\n");
+    
     Process* proc = create_user_process();
-    
-    // testing
-    for (u64 i = 0x80201c3aUL; i <= 0x80201ca2UL; i ++){
-        if (i != vaddr_to_paddr(kernel_page_table, i)){
-            PANIC("page error");
-        }
-    }
-    for (u64 i = 0x802013b0UL; i <= 0x8020140aUL; i ++){
-        if (i != vaddr_to_paddr(kernel_page_table, i)){
-            PANIC("page error");
-        }
-    }
+    test_page(proc);
 
-    pr_cont_debug("create this user process : ");
-    process_debug(proc);
-    
     scheduler();
-    PANIC("process error");
 }

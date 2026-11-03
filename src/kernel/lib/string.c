@@ -54,3 +54,25 @@ int strcmp(const char *s1, const char *s2) {
 
     return *(unsigned char *)s1 - *(unsigned char *)s2;
 }
+
+void * memmove(void *dst, const void *src, u64 n) {
+    const char *s;
+    char *d;
+
+    if (n == 0) return dst;
+
+    s = src;
+    d = dst;
+    if (s < d && s + n > d) {
+        s += n;
+        d += n;
+        while (n-- > 0)
+            *--d = *--s;
+    } else
+        while (n-- > 0)
+            *d++ = *s++;
+
+    return dst;
+}
+
+

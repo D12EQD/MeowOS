@@ -142,7 +142,7 @@ bool mappages(pt_t page_table, u64 va, u64 page_count, u64 paddr, u64 permit_fla
         pte = walk(page_table, true, vaddr);
 
         if (pte == NULL) return false;
-        if unlikely(*pte & PTE_V) PANIC("mappages: remap %lx", PTE_TO_PADDR(*pte));
+        if unlikely(*pte & PTE_V) PANIC("mappages: remap %lx", (u64)PTE_TO_PADDR(*pte));
 
         *pte = PADDR_TO_PTE(paddr) | permit_flag | PTE_V;
     }
@@ -184,8 +184,7 @@ void kernel_page_init(){
         (u64)__free_ram, PTE_R | PTE_W
     );
 
-    // NOTE : 此处是重要设计决策
-    // TRAMPOLINE_VADDR，用户和内核指向的地址一致
+    // NOTE: TRAMPOLINE_VADDR，用户和内核指向的地址一致
 
     // 分配 trampoline
     kernel_mappages(
@@ -289,6 +288,33 @@ void user_unmap_pages(pt_t page_table, u64 start, u64 page_count, bool is_free){
 
         *pte = 0;
     }
+}
+
+
+
+/* 复制进程的页表内容给另外一个进程 一般用于 fork 
+ * returns : bool
+ */
+bool copy_page_table(pt_t old, pt_t new, u64 page_count){
+    pte_t *pte;
+    u64 flags;
+    u64 i;
+
+    for (i = USER_VADDR_START; i < USER_VADDR_START + page_count * PAGE_SIZE; i += PAGE_SIZE) {
+        if ((pte = walk(old, i, 0)) == NULL) continue; // page table entry hasn't been allocated
+        if ((*pte & PTE_V) == 0) continue; // physical page hasn't been allocated
+
+        flags = GET_PTE_FLAG(*pte);
+        // TODO : copy 页面
+        if (user_map_pages(new, i, PAGE_SIZE, flags) != 0) {
+            goto err;
+        }
+    }
+    return 0;
+
+err:
+    user_unmap_pages(new, USER_VADDR_START, i / PAGE_SIZE, 1);
+    return NULL;
 }
 
 /* 

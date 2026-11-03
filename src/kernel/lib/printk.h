@@ -3,6 +3,8 @@
 #include "kernel/arch/def.h"
 #include "kernel/lib/def.h"
 
+#define __printf(a, b) __attribute__((format(printf, a, b)))
+
 typedef enum {
     K_INFO      = 1 << 0,
     K_WARNING   = 1 << 1,
@@ -24,8 +26,8 @@ typedef enum {
 
 
 int vsprintf(char *buf, const char *fmt, va_list args);
-int sprintf(char *buf, const char *fmt, ...);
-int printk(KernelPrintLevel level, const char *fmt, ...);
+int __printf(2, 3) sprintf(char *buf, const char *fmt, ...);
+int __printf(2, 3) printk(KernelPrintLevel level, const char *fmt, ...);
 
 void set_print_filter(u64 new_level);
 void puts(char *s);
@@ -37,4 +39,4 @@ void puts_n(char *s, u64 count);
     while (1);                                                      \
 } while (0)
 
-#define ASSERT(cond) do{ if unlikely(!( cond )){ PANIC( "assert error " __FILE__ ":%lu", __LINE__); } }while(0)
+#define ASSERT(cond) do{ if unlikely(!( cond )){ PANIC( "assert error " __FILE__ ":%d", __LINE__); } }while(0)

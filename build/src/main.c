@@ -365,29 +365,29 @@ bool main_build(bool is_debug, int argc, char **argv) {
         if (!build_target(&t)) return false;
     }
 
-    /* 4. mmode：src/mmode/.c -> ... -> mmode.elf / mmode.bin */
-    {
-        BuildTarget t = {
-            .src_dir    = MMODE_SRC,
-            .obj_dir    = MMODE_SRC,
-            .ld_script  = MMODE_LD,
-            .extra_libs = {0},
-            .out_elf    = MMODE_ELF,
-            .out_bin    = MMODE_BIN,
-            .map_path   = NULL,
-        };
-        
-        // 换 mapi
-        // rule_replace(&g_asm_flag, "-mabi=lp64d", "-mabi=lp64");
-        // rule_replace(&g_cc_flag, "-mabi=lp64d", "-mabi=lp64");
-        // rule_replace(&g_ld_flag, "-mabi=lp64d", "-mabi=lp64");
-        
-        nob_cmd_append(&t.extra_libs, OPEN_SBI_LIB); // 加入opeasbi 的静态链接库
-        notice(ANSI_GREEN, "Build mmode");
-        bool ok = build_target(&t);
-        nob_cmd_free(t.extra_libs);
-        if (!ok) return false;
-    }
+    // /* 4. mmode：src/mmode/.c -> ... -> mmode.elf / mmode.bin */
+    // {
+    //     BuildTarget t = {
+    //         .src_dir    = MMODE_SRC,
+    //         .obj_dir    = MMODE_SRC,
+    //         .ld_script  = MMODE_LD,
+    //         .extra_libs = {0},
+    //         .out_elf    = MMODE_ELF,
+    //         .out_bin    = MMODE_BIN,
+    //         .map_path   = NULL,
+    //     };
+    //
+    //     // 换 mapi
+    //     // rule_replace(&g_asm_flag, "-mabi=lp64d", "-mabi=lp64");
+    //     // rule_replace(&g_cc_flag, "-mabi=lp64d", "-mabi=lp64");
+    //     // rule_replace(&g_ld_flag, "-mabi=lp64d", "-mabi=lp64");
+    //
+    //     nob_cmd_append(&t.extra_libs, OPEN_SBI_LIB); // 加入opeasbi 的静态链接库
+    //     notice(ANSI_GREEN, "Build mmode");
+    //     bool ok = build_target(&t);
+    //     nob_cmd_free(t.extra_libs);
+    //     if (!ok) return false;
+    // }
 
     return true;
 }

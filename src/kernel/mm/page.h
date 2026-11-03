@@ -50,6 +50,7 @@ Sv39 的虚拟地址
 #define PTE_A   (1UL << 6) // accessed
 #define PTE_D   (1UL << 7) // dirty
 
+#define GET_PTE_FLAG(pte)       ((pte) & 0x3FF)
 
 #define GET_VA_OFFSET(va)       __get_bit(va, 0, 11)
 #define GET_VA_VPN0(va)         __get_bit(va, 12, 20)

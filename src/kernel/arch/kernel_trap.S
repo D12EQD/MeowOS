@@ -1,5 +1,6 @@
 .globl kernel_trap_handler 
 .globl kernel_trap_entry
+.globl kernel_trap_start
 
 .align 4
 kernel_trap_entry:

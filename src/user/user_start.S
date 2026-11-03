@@ -1,9 +1,8 @@
 .section .text
 .globl _start
+.globl user_main
 _start:
-    la a0, msg
-    li a1, 16
-    li a7, 1
+    call user_main
 _loop:
     j _loop
 
