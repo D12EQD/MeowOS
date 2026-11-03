@@ -292,29 +292,46 @@ void user_unmap_pages(pt_t page_table, u64 start, u64 page_count, bool is_free){
 
 
 
-/* 复制进程的页表内容给另外一个进程 一般用于 fork 
+/* 
+ * 复制页表内容给另外一个页表 一般用于 fork
  * returns : bool
  */
 bool copy_page_table(pt_t old, pt_t new, u64 page_count){
+    // 有错误！
     pte_t *pte;
-    u64 flags;
     u64 i;
-
+    u64 new_page;
+    
+    // pr_debug("copy_page_table old=%lx new=%lx page_count=%ld", old, new, page_count);
     for (i = USER_VADDR_START; i < USER_VADDR_START + page_count * PAGE_SIZE; i += PAGE_SIZE) {
-        if ((pte = walk(old, i, 0)) == NULL) continue; // page table entry hasn't been allocated
-        if ((*pte & PTE_V) == 0) continue; // physical page hasn't been allocated
+        if ((pte = walk(old, false, i)) == NULL) continue;
+        if ((*pte & PTE_V) == 0) continue;
+        
+        // pr_debug("copy_page_table debug : %ld alloc", i);
+        // 1. 分配 page
+        new_page = (u64)kalloc_page();
+        if (!new_page) goto err;
 
-        flags = GET_PTE_FLAG(*pte);
-        // TODO : copy 页面
-        if (user_map_pages(new, i, PAGE_SIZE, flags) != 0) {
-            goto err;
+        // 2. old_flag -> new_flag
+        u64 flag = (u64)GET_PTE_FLAG(*pte);
+        if (!mappages(new, i, 1, new_page, flag)){
+            goto free_page_err;
+        }
+
+        // 3. copy
+        void *pa = (void *)PTE_TO_PADDR(*pte);
+        if (memcpy((void *)new_page, pa, PAGE_SIZE) != PAGE_SIZE){
+            goto free_page_err;
         }
     }
-    return 0;
+    return true;
 
+free_page_err:
+    kfree((void *)new_page);
 err:
+    pr_debug("copy_page_table error");
     user_unmap_pages(new, USER_VADDR_START, i / PAGE_SIZE, 1);
-    return NULL;
+    return false;
 }
 
 /* 

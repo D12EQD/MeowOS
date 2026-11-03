@@ -1,6 +1,5 @@
 #include "user/user_main.h"
 
-
 u64 memcpy(void *dst, const void *src, size_t n) {
     u8 *d = (u8 *) dst;
     const u8 *s = (const u8 *) src;
@@ -72,17 +71,22 @@ u64 syscall(u64 sysnumber, u64 arg0, u64 arg1, u64 arg2, u64 arg3, u64 arg4, u64
     return a0;
 }
 
-u64 write(i64 fd, void* buf, u64 buf_len){
+static inline u64 write(i64 fd, void* buf, u64 buf_len){
     return syscall(SYS_WRITE, (u64)fd, (u64)buf, buf_len, 0, 0, 0);
 }
 
-u64 read(i64 fd, void* buf, u64 buf_len){
+static inline u64 read(i64 fd, void* buf, u64 buf_len){
     return syscall(SYS_READ, (u64)fd, (u64)buf, buf_len, 0, 0, 0);
+}
+
+static inline u64 fork(){
+    return syscall(SYS_FORK, 0, 0, 0, 0, 0, 0);
 }
 
 const char * msg = "Hello Kernel\n";
 
 int user_main(){
+    fork();
     write(1, (void *)msg, strlen(msg));
     while (1);
     return 0;

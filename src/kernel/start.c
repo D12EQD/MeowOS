@@ -84,12 +84,34 @@ void test_page(Process *proc){
     pr_debug("process_stack_page_end is %lx\n", PROCESS_STACK_PAGE_END);
 }
 
+void test_copy_page(){
+    Process* fa = create_user_process();
+    first_user_init(fa);
+
+    current_process = fa;
+    Process* son = get_proc_from_pid(kfork("son"));
+    
+    pr_debug("fa alloc page %lu", fa->alloc_page_count);
+
+    for (u64 i = 0; i < son->alloc_page_count; i ++){
+        u64 va = USER_VADDR_START + i * PAGE_SIZE;
+        u64 son_pa = vaddr_to_paddr(son->page_table, va);
+        u64 fa_pa = vaddr_to_paddr(fa->page_table, va);
+
+        // pr_debug("va = %lx, son_pa = %lx fa_pa = %lx", va, son_pa, fa_pa);
+
+        ASSERT(memcmp((void *)son_pa, (void *)fa_pa, PAGE_SIZE) == 0);
+    }
+    ASSERT(fa->alloc_page_count == son->alloc_page_count);
+
+    current_process = get_proc_from_pid(0); // 空闲进程
+    // pr_debug("passed test_copy_page\n");
+}
+
 void kernel_main(){
     // set_print_filter(K_DEBUG);
-    pr_debug("hello world\n");
-    
-    Process* proc = create_user_process();
-    test_page(proc);
-
+    // test_copy_page();
+    Process* p = create_user_process();
+    first_user_init(p);
     scheduler();
 }

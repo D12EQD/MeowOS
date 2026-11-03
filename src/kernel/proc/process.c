@@ -25,226 +25,22 @@ Process *current_process;
 
 static inline void process_free_page_table(Process* p){
     user_unmap_pages(p->page_table, TRAPFRAME_VADDR, 1, true);
-    user_unmap_pages(p->page_table, TRAMPOLINE_VADDR, 1, true);
+    user_unmap_pages(p->page_table, TRAMPOLINE_VADDR, 1, false);
     user_unmap_pages(p->page_table, USER_VADDR_START, p->alloc_page_count, true);
     user_unmap_pages(p->page_table, PROCESS_STACK_PAGE_START, PROCESS_STACK_PAGE_COUNT, true);
     free_walk(p->page_table, 2);
 }
 
-void create_idle_process(){
-    // 0 号为空闲进程
-    // TODO : 该进程需要做更多事情
-    current_process = &process_list[0];
-    current_process->state = PROC_READY;
-    current_process->pid = 0;
-}
-
-void process_init(){
-    for (u64 i = 0; i < PROCESS_MAX_COUNT; i ++) {
-        process_list[i].state = PROC_UNUSED;
-        process_list[i].kstack_bottom = KERNEL_STACK(i); // 该地址已经被内核代码映射完毕
-        process_list[i].pid = i;
-    }
-    create_idle_process();
-}
-
-/* 创建用户进程页表 */
-pt_t create_user_process_page(Process *p){
-    pt_t page_table = user_alloc_page_table(); // user alloc page table 不一定成功
-    if (!page_table) goto page_table_free;
-
-    // 对于固定的代码段或者数据段，使用 mappages 分配，该代码不会调用页面分配算法
-    // 对于动态的数据段，使用 user_map_pages 分配，该代码会调用页面分配算法
-
-    // 1. trampoline（内核/用户共享）
-    if (!mappages(page_table, TRAMPOLINE_VADDR, 1, (u64)trampoline, PTE_R | PTE_X))
-        goto trampoline_free;
-
-    // 2. trapframe
-    p->trap_frame_page = kalloc_page();
-    if (!p->trap_frame_page) goto trampoline_free;
-    memset((void *)p->trap_frame_page, 0, PAGE_SIZE);
-
-    if (!mappages(page_table, TRAPFRAME_VADDR, 1, (u64)p->trap_frame_page, PTE_R | PTE_W)) {
-        kfree(p->trap_frame_page);
-        p->trap_frame_page = NULL;
-        goto trampoline_free;
-    }
-    
-    // 3. 用户程序
-    u64 page_count = (_binary_user_bin_end - _binary_user_bin_start + PAGE_SIZE - 1) / PAGE_SIZE;
-    if (page_count != user_map_pages(page_table, USER_VADDR_START, page_count, PTE_R | PTE_X)){
-        goto trapframe_free;
-    }
-
-    // 复制用户程序到用户页表映射到的物理页
-    u64 total = (u64)_binary_user_bin_end - (u64)_binary_user_bin_start;
-    u64 src  = (u64)_binary_user_bin_start;
-    u64 dst_va = USER_VADDR_START;
-    while (total > 0) {
-        u64 n = (total > PAGE_SIZE) ? PAGE_SIZE : total;
-        u64 dst_pa = vaddr_to_paddr(page_table, dst_va);
-        if (!dst_pa) goto user_free;
-        memcpy((void *)dst_pa, (void *)src, n);
-        src += n;
-        dst_va += n;
-        total -= n;
-    }
-    p->alloc_page_count += page_count;
-
-    // 4. 用户栈
-    if (user_map_pages(
-         page_table, 
-         PROCESS_STACK_PAGE_START,
-         PROCESS_STACK_PAGE_COUNT, 
-         PTE_R | PTE_W
-    ) != PROCESS_STACK_PAGE_COUNT ){
-        goto user_free;
-    }
-
-    return page_table;
-
-// stack_free:
-    user_unmap_pages(page_table, PROCESS_STACK_PAGE_START, PROCESS_STACK_PAGE_COUNT, true);
-user_free:
-    user_unmap_pages(page_table, USER_VADDR_START, page_count, true);
-trapframe_free:
-    user_unmap_pages(page_table, TRAPFRAME_VADDR, 1, true);
-trampoline_free:
-    user_unmap_pages(page_table, TRAMPOLINE_VADDR, 1, false);
-page_table_free:
-    if (page_table) free_walk(page_table, 2);
-    return NULL;
-}
-
-/*
- * 创建用户进程
- */
-Process *create_user_process() {
-    // 1. init 
-    int idx = -1;
-    for (int i = 0; i < PROCESS_MAX_COUNT; i ++){
-        // spinlock_acquire(&process_list[i].lock);
-        if (process_list[i].state == PROC_UNUSED){
-            idx = i;
-            break;
-        }
-    }
-
-    if (idx == -1) goto return_null;
-    Process *p = &process_list[idx];
-
-    p->state = PROC_READY; // 进程状态
-    p->alloc_page_count = 0;
-    
-    // 2. create page_table for this process
-    p->page_table = create_user_process_page(p);
-    if (!p->page_table) goto free_trap_frame_page;
-    
-    // 3. update context
-    memset(&(p->context), 0, sizeof(ThreadCtx));
-    p->context.ra = (u64)fork_ret;
-    p->context.sp = p->kstack_bottom + PAGE_SIZE;
-
-    return p;
-
-free_trap_frame_page:
-    kfree(p->trap_frame_page);
-return_null:
-    return NULL;
-}
-
-/*
- * 释放一个用户进程 释放该用户分配的页表
- */
-void free_user_process(Process* p){
-    p->state = PROC_UNUSED;
-
-    process_free_page_table(p);
-    p->page_table = NULL;
-    p->trap_frame_page = NULL;
-    
-    p->alloc_page_count = 0;
-}
-
-/*
- * 找到可以执行的进程并且上锁
- * 需要调用 spinlock_release 对进程解锁
- */
-Process* find_ready_process(){
-    static int idx;
-    idx = (current_process->pid + 1) % PROCESS_MAX_COUNT;
-    for (int i = 0; i < PROCESS_MAX_COUNT; i ++, idx = (idx + 1) % PROCESS_MAX_COUNT){
-        if (idx == 0) continue; // 优先跳过空闲进程
-
-        // 尝试获取当前可以运行进程的锁
-        // 如果发现进程持有锁（比如正在运行）跳过
-        // if (!spinlock_try_acquire(&process_list[idx].lock)){
-        //     continue;
-        // }
-
-        if (process_list[idx].state == PROC_READY){
-            // pr_cont_debug("find_ready_process %idx : ", idx); process_debug(&process_list[idx]);
-            // spinlock_debug(&process_list[idx].lock);
-            return &process_list[idx];
-        }
-
-        // spinlock_release(&process_list[idx].lock);
-    }
-
-    return &process_list[0];
-}
-
-
-// Give up the CPU for one scheduling round.
-void yield(void) {
-    Process *old = current_process;
-    current_process = find_ready_process();
-    
-    old->state = PROC_READY;
-    current_process->state = PROC_RUNNING;
-    
-    pr_debug("change the process from pid=%d to pid=%d", old->pid, current_process->pid);
-
-    if (old == current_process) return; // 不切换
-    switch_ctx(&old->context, &current_process->context);
-}
-
-void scheduler(void) {
-    Process *p;
-
-    while (1){
-        interrupt_on();
-        interrupt_off();
-
-        p = find_ready_process();
-        if (p == process_list){
-            pr_warn("cpu is idle");
-            _ASM("wfi");
-        }else{
-            pr_cont_debug("current_process is "); process_debug(current_process);
-            p->state = PROC_RUNNING;
-            Process *old = current_process;
-
-            // debug
-            pr_cont_debug("switch to the process : "); process_debug(p);
-
-            current_process = p;
-            switch_ctx(&old->context, &current_process->context);
-        }
-    }
-}
-
 void process_debug(Process *p){
     pr_debug("[");
+    if (p->name) pr_debug("  process name : %s", p->name);
     pr_debug("  process_debug : pid = %d", p->pid);
     pr_debug("  context infomation : ra = %lx, sp = %lx", 
         p->context.ra, p->context.sp);
     pr_debug("  page_table = %lx, frame_page = %lx", 
         (u64)p->page_table, (u64)p->trap_frame_page
     );
-    pr_debug("]");
-
+    pr_debug("]\n");
 }
 
 void trap_frame_debug(TrapFrame *tf){
@@ -296,3 +92,271 @@ void trap_frame_debug(TrapFrame *tf){
     pr_cont_debug("  [280] t6                 = 0x%lx\n", tf->t6);
     pr_cont_debug("}\n");
 }
+
+void create_idle_process(){
+    // 0 号为空闲进程
+    // TODO : 该进程需要做更多事情
+    current_process = &process_list[0];
+    current_process->state = PROC_READY;
+    current_process->pid = 0;
+}
+
+void process_init(){
+    for (u64 i = 0; i < PROCESS_MAX_COUNT; i ++) {
+        process_list[i].state = PROC_UNUSED;
+        process_list[i].kstack_bottom = KERNEL_STACK(i); // 该地址已经被内核代码映射完毕
+        process_list[i].pid = i;
+    }
+    create_idle_process();
+}
+
+/* 创建用户进程页表 */
+pt_t create_user_process_page(Process *p){
+    pt_t page_table = user_alloc_page_table(); // user alloc page table 不一定成功
+    if (!page_table) goto page_table_free;
+
+    // 对于固定的代码段或者数据段，使用 mappages 分配，该代码不会调用页面分配算法
+    // 对于动态的数据段，使用 user_map_pages 分配，该代码会调用页面分配算法
+
+    // 1. trampoline（内核/用户共享）
+    if (!mappages(page_table, TRAMPOLINE_VADDR, 1, (u64)trampoline, PTE_R | PTE_X))
+        goto trampoline_free;
+
+    // 2. trapframe
+    p->trap_frame_page = kalloc_page();
+    if (!p->trap_frame_page) goto trampoline_free;
+    memset((void *)p->trap_frame_page, 0, PAGE_SIZE);
+
+    if (!mappages(page_table, TRAPFRAME_VADDR, 1, (u64)p->trap_frame_page, PTE_R | PTE_W)) {
+        kfree(p->trap_frame_page);
+        p->trap_frame_page = NULL;
+        goto trampoline_free;
+    }
+
+    // 3. 用户栈
+    u64 page_count = user_map_pages(
+        page_table, 
+        PROCESS_STACK_PAGE_START,
+        PROCESS_STACK_PAGE_COUNT, 
+        PTE_R | PTE_W
+    );
+
+    if (page_count != PROCESS_STACK_PAGE_COUNT){
+        goto stack_free;
+    }
+
+    p->alloc_page_count = 0;
+
+    return page_table;
+
+stack_free:
+    user_unmap_pages(page_table, PROCESS_STACK_PAGE_START, PROCESS_STACK_PAGE_COUNT, true);
+// trapframe_free:
+    user_unmap_pages(page_table, TRAPFRAME_VADDR, 1, true);
+trampoline_free:
+    user_unmap_pages(page_table, TRAMPOLINE_VADDR, 1, false);
+page_table_free:
+    if (page_table) free_walk(page_table, 2);
+    return NULL;
+}
+
+bool first_user_init(Process *proc){
+    ASSERT(proc->pid == 1);
+    ASSERT(proc->page_table);
+    pt_t page_table = proc->page_table;
+
+    // 用户程序 copy
+    u64 page_count = (_binary_user_bin_end - _binary_user_bin_start + PAGE_SIZE - 1) / PAGE_SIZE;
+    if (page_count != user_map_pages(page_table, USER_VADDR_START, page_count, PTE_R | PTE_X)){
+        goto error;
+    }
+
+    // 复制用户程序到用户页表映射到的物理页
+    u64 total = (u64)_binary_user_bin_end - (u64)_binary_user_bin_start;
+    u64 src  = (u64)_binary_user_bin_start;
+    u64 dst_va = USER_VADDR_START;
+    while (total > 0) {
+        u64 n = (total > PAGE_SIZE) ? PAGE_SIZE : total;
+        u64 dst_pa = vaddr_to_paddr(page_table, dst_va);
+        if (!dst_pa) goto error;
+        memcpy((void *)dst_pa, (void *)src, n);
+        src += n;
+        dst_va += n;
+        total -= n;
+    }
+
+    proc->trap_frame_page->epc = USER_VADDR_START;
+    proc->alloc_page_count += page_count;
+    proc->name = "first_process";
+    return true;
+error:
+    PANIC("First User error");
+    return false;
+}
+
+/*
+ * 创建用户进程
+ * 首先寻找一个空闲位置存放新进程，为该进程创建新页表
+ * 并且更新上下文返回位置为 fork_ret
+ */
+Process *create_user_process() {
+    // 1. init 
+    int idx = -1;
+    for (int i = 0; i < PROCESS_MAX_COUNT; i ++){
+        // spinlock_acquire(&process_list[i].lock);
+        if (process_list[i].state == PROC_UNUSED){
+            idx = i;
+            break;
+        }
+    }
+
+    if (idx == -1) goto return_null;
+    Process *p = &process_list[idx];
+
+    p->state = PROC_READY; // 进程状态
+    p->alloc_page_count = 0;
+    
+    // 2. create page_table for this process
+    p->page_table = create_user_process_page(p);
+    if (!p->page_table) goto free_trap_frame_page;
+    
+    // 3. update context
+    memset(&(p->context), 0, sizeof(ThreadCtx));
+    p->context.ra = (u64)fork_ret;
+    p->context.sp = p->kstack_bottom + PAGE_SIZE;
+
+    return p;
+
+free_trap_frame_page:
+    kfree(p->trap_frame_page);
+return_null:
+    return NULL;
+}
+
+/*
+ * 释放一个用户进程 释放该用户分配的页表
+ */
+void free_user_process(Process* p){
+    p->state = PROC_UNUSED;
+    process_free_page_table(p);
+    p->page_table = NULL;
+    p->trap_frame_page = NULL;
+    p->alloc_page_count = 0;
+    p->father = NULL;
+}
+
+/*
+ * 找到可以执行的进程并且上锁
+ * 需要调用 spinlock_release 对进程解锁
+ */
+Process* find_ready_process(){
+    static int idx;
+    idx = (current_process->pid + 1) % PROCESS_MAX_COUNT;
+    for (int i = 0; i < PROCESS_MAX_COUNT; i ++, idx = (idx + 1) % PROCESS_MAX_COUNT){
+        if (idx == 0) continue; // 优先跳过空闲进程
+
+        // 尝试获取当前可以运行进程的锁
+        // 如果发现进程持有锁（比如正在运行）跳过
+        // if (!spinlock_try_acquire(&process_list[idx].lock)){
+        //     continue;
+        // }
+
+        if (process_list[idx].state == PROC_READY){
+            // pr_cont_debug("find_ready_process %idx : ", idx); process_debug(&process_list[idx]);
+            // spinlock_debug(&process_list[idx].lock);
+            return &process_list[idx];
+        }
+
+        // spinlock_release(&process_list[idx].lock);
+    }
+
+    return &process_list[0];
+}
+
+
+// Give up the CPU for one scheduling round.
+void yield(void) {
+    Process *old = current_process;
+    current_process = find_ready_process();
+    
+    old->state = PROC_READY;
+    current_process->state = PROC_RUNNING;
+    
+    // pr_debug("change the process from pid=%d to pid=%d", old->pid, current_process->pid);
+
+    if (old == current_process) return; // 不切换
+    switch_ctx(&old->context, &current_process->context);
+}
+
+void scheduler(void) {
+    Process *p;
+
+    while (1){
+        interrupt_on();
+        interrupt_off();
+
+        p = find_ready_process();
+        if (p == process_list){
+            pr_warn("cpu is idle");
+            _ASM("wfi");
+        }else{
+            pr_cont_debug("current_process is "); process_debug(current_process);
+            p->state = PROC_RUNNING;
+            Process *old = current_process;
+
+            // debug
+            pr_cont_debug("switch to the process : "); process_debug(p);
+
+            current_process = p;
+            switch_ctx(&old->context, &current_process->context);
+        }
+    }
+}
+
+/* 
+ * fork 父亲进程
+ * return:
+ *      pid of son
+ */
+i64 kfork(const char * name){
+    // TODO : COW 机制
+    // TODO:: 上锁确保多进程安全
+
+    Process* fa = current_process;
+    Process* p = create_user_process();
+    p->name = name;
+
+    process_debug(fa);
+    process_debug(p);
+    
+    // copy normal page
+    // pr_debug("copy normal page");
+    copy_page_table(fa->page_table, p->page_table, fa->alloc_page_count);
+
+    ASSERT(p->alloc_page_count == 0);
+    p->alloc_page_count += fa->alloc_page_count;
+ 
+    // pr_debug("copy stack");
+
+    // copy stack
+    for (u64 va = PROCESS_STACK_PAGE_START; va < PROCESS_STACK_PAGE_END; va += PAGE_SIZE){
+        void* fas = (void *)vaddr_to_paddr(fa->page_table, va);
+        void* ps = (void *)vaddr_to_paddr(p->page_table, va);
+        memcpy(fas, ps, PAGE_SIZE);
+    }
+    
+    // pr_debug("copy tram_frame_page");
+    // copy tram_frame_page
+    *(p->trap_frame_page) = *(fa->trap_frame_page);
+    
+    p->trap_frame_page->a0 = 0; // 子进程 return 0
+    
+    p->father = fa;
+    return p->pid;
+}
+
+Process * get_proc_from_pid(i64 pid){
+    if (pid < 0) return NULL;
+    return &process_list[pid];
+}
+

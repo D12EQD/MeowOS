@@ -3,6 +3,7 @@
 #include "kernel/lib/printk.h"
 #include "kernel/arch/sbi.h"
 
+/* 返回拷贝的字节数量 */
 u64 memcpy(void *dst, const void *src, size_t n) {
     u8 *d = (u8 *) dst;
     const u8 *s = (const u8 *) src;
@@ -14,6 +15,7 @@ u64 memcpy(void *dst, const void *src, size_t n) {
     return res;
 }
 
+/* 返回赋值的字节数量 */
 u64 memset(void *buf, char c, size_t n) {
     u8 *p = (u8 *) buf;
     u64 res = 0;
@@ -55,24 +57,16 @@ int strcmp(const char *s1, const char *s2) {
     return *(unsigned char *)s1 - *(unsigned char *)s2;
 }
 
-void * memmove(void *dst, const void *src, u64 n) {
-    const char *s;
-    char *d;
-
-    if (n == 0) return dst;
-
-    s = src;
-    d = dst;
-    if (s < d && s + n > d) {
-        s += n;
-        d += n;
-        while (n-- > 0)
-            *--d = *--s;
-    } else
-        while (n-- > 0)
-            *d++ = *s++;
-
-    return dst;
+i64 memcmp(const void *s1, const void *s2, u64 n){
+    const char *p1 = s1, *p2 = s2;
+    while (n-- > 0) {
+        if (*p1 != *p2) {
+            return *p1 - *p2;
+        }
+        p1++;
+        p2++;
+    }
+    return 0;
 }
 
 

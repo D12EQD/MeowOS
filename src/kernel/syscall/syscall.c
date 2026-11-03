@@ -1,4 +1,3 @@
-#pragma once
 #include "kernel/arch/def.h"
 #include "kernel/lib/def.h"
 
@@ -42,15 +41,28 @@ u64 sys_write(){
     return 1;
 }
 
+u64 sys_fork(){
+    return kfork("fork");
+}
+
 void syscall(){
     int num;
     Process *p = current_process;
     
     num = p->trap_frame_page->a7;
     if (num >= 0 && num < SYS_COUNT) {
-        ASSERT(syscall_fn_list[num] == sys_write);
         p->trap_frame_page->a0 = syscall_fn_list[num]();
     } else {
         p->trap_frame_page->a0 = -1;
     }
 }
+
+u64 sys_read(void)   { return 0; }
+u64 sys_open(void)   { return 0; }
+u64 sys_close(void)  { return 0; }
+u64 sys_fstat(void)  { return 0; }
+u64 sys_exec(void)   { return 0; }
+u64 sys_wait(void)   { return 0; }
+u64 sys_exit(void)   { return 0; }
+u64 sys_getpid(void) { return 0; }
+u64 sys_sbrk(void)   { return 0; }

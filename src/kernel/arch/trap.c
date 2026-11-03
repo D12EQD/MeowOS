@@ -35,9 +35,6 @@ void trap_init(){
  * 内核异常处理程序
  */ 
 void kernel_trap_handler(){
-    u64 scause = READ_CSR(CSR_SCAUSE);
-    u64 stval = READ_CSR(CSR_STVAL);
-    u64 k_pc = READ_CSR(CSR_SEPC);
     u64 sstatus = READ_CSR(CSR_SSTATUS);
 
     if ((sstatus & SSTATUS_SPP) == 0){ // from user 
@@ -49,11 +46,11 @@ void kernel_trap_handler(){
     }
     
     u64 device_from = dev_interrupt();
-    pr_debug("kernel trap for cause = %lx, pc = %lx, status = %lx, stval = %lx", scause, k_pc, sstatus, stval);
+    // pr_debug("kernel trap for cause = %lx, pc = %lx, status = %lx, stval = %lx", scause, k_pc, sstatus, stval);
 
     switch (device_from) {
         case DevcieTimer:
-            pr_debug("timer");
+            // pr_debug("timer");
             timer_interrupt();
             break;
     }
@@ -65,14 +62,13 @@ void kernel_trap_handler(){
  * 用户程序异常处理程序
  */ 
 u64 user_trap_handler() {
-    pr_debug("user_trap_handler start");
+    // pr_debug("user_trap_handler start");
     u64 scause = READ_CSR(CSR_SCAUSE);
-    u64 stval = READ_CSR(CSR_STVAL);
-    u64 user_pc = READ_CSR(CSR_SEPC);
     u64 sstatus = READ_CSR(CSR_SSTATUS);
 
-    pr_debug("user trap for cause = %lx, pc = %lx, status = %lx, stval = %lx", scause, user_pc, sstatus, stval);
-    if ((sstatus & SSTATUS_SPP) == 1){ // from kernel 
+    // pr_debug("user trap for cause = %lx, pc = %lx, status = %lx, stval = %lx", scause, user_pc, sstatus, stval);
+    // from kernel
+    if ((sstatus & SSTATUS_SPP) == 1){ 
         PANIC("user_trap_handler : not from supervisor mode");
     }
     
@@ -89,7 +85,7 @@ u64 user_trap_handler() {
         case 8: // syscall
             current_process->trap_frame_page->epc += 4;
             interrupt_on(); // 开启中断，陷入内核态时会自动关中断
-            pr_debug("syscall");
+            // pr_debug("syscall");
             syscall();
             break;
         case 13: // page error
@@ -158,20 +154,19 @@ void process_prepare_return_user(){
  * 当切换上下文的时候，cpu立刻执行该函数
  */
 void fork_ret(void) {
-    current_process->trap_frame_page->epc = USER_VADDR_START;
     process_prepare_return_user();
     void (*trap_ret)(u64) = (void *)(
         TRAMPOLINE_VADDR + ((u64)user_trap_ret - (u64)trampoline)
     );
 
-    pr_debug("\n");
+    // pr_debug("\n");
     trap_frame_debug(current_process->trap_frame_page);
-    pr_debug("\n");
+    // pr_debug("\n");
 
     // 执行 user_trap_ret，保存上下文，进入用户程序
     u64 atp = MAKE_SATP(current_process->page_table);
 
-    pr_debug("satp is 0x%lx", atp);
+    // pr_debug("satp is 0x%lx", atp);
 
     trap_ret(atp);
 }

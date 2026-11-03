@@ -11,4 +11,4 @@ char *strcpy(char *dst, const char *src);
 
 u64 memcpy(void *dst, const void *src, size_t n);
 u64 memset(void *buf, char c, size_t n);
-void * memmove(void *dst, const void *src, u64 n) ;
+i64 memcmp(const void *s1, const void *s2, u64 n);
