@@ -16,6 +16,8 @@ doc/
 
 compile_commands.json
 .cache/
+.workbuddy
+.Trash-0/
 .DS_Store
 debug.txt
 script/makeheaders

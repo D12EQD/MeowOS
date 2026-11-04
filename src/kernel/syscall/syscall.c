@@ -7,6 +7,8 @@
 
 #include "kernel/mm/page.h"
 
+#define WRITE_CHUNK_SIZE 256
+
 static u64 get_arg(int n) {
     Process *p = current_process;
     switch (n) {
@@ -27,19 +29,28 @@ static u64 get_arg(int n) {
     return -1;
 }
 
-/*
- * ssize_t write(const void buf[count], size_t count);
- */
 u64 sys_write(){
     i64 fd = get_arg(0);
-    ASSERT(fd == 1);
-    char *buf = (char *)vaddr_to_paddr(current_process->page_table, get_arg(1));
+    if (fd != 1) return -1; // 目前只支持 stdout，非法 fd 返回 -1 而不是 PANIC
 
-    if (buf == NULL) return -1;
+    u64 user_buf = get_arg(1);
     u64 count = get_arg(2);
+    u64 done = 0;
+    char buf[WRITE_CHUNK_SIZE];
 
-    puts_n(buf, count);
-    return 1;
+    while (done < count){
+        u64 n = count - done;
+        if (n > sizeof buf) n = sizeof buf;
+
+        if (copy_from_user(current_process->page_table, buf, (void *)(user_buf + done), n) != (i64)n){
+            return done ? done : (u64)-1;
+        }
+
+        puts_n(buf, n);
+        done += n;
+    }
+
+    return count;
 }
 
 u64 sys_fork(){
@@ -47,7 +58,7 @@ u64 sys_fork(){
 }
 
 void syscall(){
-    int num;
+    i64 num;
     Process *p = current_process;
     
     num = p->trap_frame_page->a7;

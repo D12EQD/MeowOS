@@ -1,20 +1,16 @@
 #include "user/main.h"
 #include "user/lib/lib.h"
 #include "user/lib/print.h"
-
-const char * msg = "Hello Kernel\n";
-const char * son_msg = "I am son\n";
+#include "user/test/test.h"
 
 int user_main(){
-    u64 val = fork();
+    test_run_all();
 
-    if (val){
-        println("I am fa");
-        int pid = wait(&val);
-        println("wait the pid = %d, return value = %d", pid, val);
-    }else{
-        println("I am son");
-        return 69;
+    // 根进程不能返回（kexit 里没有父进程会 PANIC），
+    // 用户态也没有 halt/wfi 可用（wfi 会被当成非法指令），所以只能空转
+    println("tests done, halting");
+    for (;;) {
+        __asm__ volatile ("nop");
     }
 
     return 0;

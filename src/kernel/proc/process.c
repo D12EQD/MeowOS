@@ -242,11 +242,17 @@ return_null:
 void free_user_process(Process* p){
     p->state = PROC_UNUSED;
     process_free_page_table(p);
-    p->page_table = NULL;
-    p->trap_frame_page = NULL;
-    p->alloc_page_count = 0;
-    p->father = NULL; // ??? 这里需要设置吗？
+
+    // clean process
+    int pid = p->pid;
+    memset(p, 0, sizeof(Process));
+
+    // reinit
+    p->state = PROC_UNUSED;
+    p->kstack_bottom = KERNEL_STACK(pid);
+    p->pid = pid;
     p->is_killed = false;
+
 }
 
 /*
@@ -255,8 +261,7 @@ void free_user_process(Process* p){
  */
 Process* find_ready_process(){
     pr_debug("find_ready_process");
-    static int idx;
-    idx = (current_process->pid + 1) % PROCESS_MAX_COUNT;
+    int idx = (current_process->pid + 1) % PROCESS_MAX_COUNT;
     for (int i = 0; i < PROCESS_MAX_COUNT; i ++, idx = (idx + 1) % PROCESS_MAX_COUNT){
         if (idx == 0) continue; // 优先跳过空闲进程
 
@@ -326,6 +331,8 @@ i64 kfork(const char * name){
 
     Process* fa = current_process;
     Process* p = create_user_process();
+    if (p == NULL) return -1;
+
     p->name = name;
 
     process_debug(fa);
@@ -333,13 +340,14 @@ i64 kfork(const char * name){
     
     // copy normal page
     // pr_debug("copy normal page");
-    copy_page_table(fa->page_table, p->page_table, fa->alloc_page_count);
+    if (copy_page_table(fa->page_table, p->page_table, fa->alloc_page_count) == false){
+        free_user_process(p);
+        return -1;
+    }
 
     ASSERT(p->alloc_page_count == 0);
     p->alloc_page_count += fa->alloc_page_count;
  
-    // pr_debug("copy stack");
-    // copy stack
     for (u64 va = PROCESS_STACK_PAGE_START; va < PROCESS_STACK_PAGE_END; va += PAGE_SIZE){
         void* fas = (void *)vaddr_to_paddr(fa->page_table, va);
         void* ps = (void *)vaddr_to_paddr(p->page_table, va);
@@ -347,10 +355,9 @@ i64 kfork(const char * name){
     }
  
     *(p->trap_frame_page) = *(fa->trap_frame_page);
- 
     p->trap_frame_page->a0 = 0; // 子进程 return 0
- 
     p->father = fa;
+
     return p->pid;
 }
 
@@ -395,10 +402,8 @@ u64 kwait(u64 exit_number){
             }
         }
 
-        // 没找到 
-        // 没孩子直接杀死
-        if (!haschild){
-            kkill(current_process->pid);
+        // 没有孩子或者已经死了
+        if (!haschild || current_process->is_killed){
             return -1;
         }
  
@@ -411,7 +416,7 @@ u64 kwait(u64 exit_number){
 void kkill(i64 pid){
     if (pid < 0 || pid >= PROCESS_MAX_COUNT) PANIC("killed out of range");
     Process *p = get_proc_from_pid(pid);
-    if (p->state == PROC_SLEEP) p->state = PROC_RUNNING;
+    if (p->state == PROC_SLEEP) p->state = PROC_READY;
     p->is_killed = true;
 }
 

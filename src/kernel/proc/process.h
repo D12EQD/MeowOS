@@ -6,7 +6,7 @@
 #include "kernel/lib/def.h"
 #include "kernel/mm/def.h"
 
-#define PROCESS_MAX_COUNT 3       // 最大进程数量
+#define PROCESS_MAX_COUNT 16       // 最大进程数量
 #define PROCESS_STACK_PAGE_COUNT 4
 
 #define PROCESS_STACK_PAGE_END (KERNEL_STACK(PROCESS_MAX_COUNT) - 3 * PAGE_SIZE)
