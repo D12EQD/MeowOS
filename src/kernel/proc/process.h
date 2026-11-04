@@ -90,7 +90,7 @@ typedef struct __Process{
     const char * name;          // debug name
     void * chan;                // 睡眠等待对象
     u64 exit_number;            // 退出码返回值
-    bool is_killed;                // 被杀了
+    bool is_killed;             // 被杀了
 }Process;
 
 extern Process *current_process;
@@ -113,4 +113,6 @@ void schedule();
 void fork_ret();
 i64 kfork(const char *name);
 void kkill(i64 pid);
-void wakeup(Process* p);
+void wakeup(void * p);
+void kexit(i64 exit_number);
+u64 kwait(u64 exit_number);

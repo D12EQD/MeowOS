@@ -56,41 +56,48 @@ void kernel_trap_handler(){
  * 用户程序异常处理程序
  */ 
 u64 user_trap_handler() {
-    // pr_debug("user_trap_handler start");
+    pr_debug("user_trap_handler start");
     u64 scause = READ_CSR(CSR_SCAUSE);
     u64 sstatus = READ_CSR(CSR_SSTATUS);
+    u64 user_pc = READ_CSR(CSR_SEPC);
+    u64 stval = READ_CSR(CSR_STVAL);
 
-    // pr_debug("user trap for cause = %lx, pc = %lx, status = %lx, stval = %lx", scause, user_pc, sstatus, stval);
+    pr_debug("user trap for cause = %lx, pc = %lx, status = %lx, stval = %lx", scause, user_pc, sstatus, stval);
     // from kernel
     if ((sstatus & SSTATUS_SPP) == 1){ 
         PANIC("user_trap_handler : not from supervisor mode");
     }
- 
+
     // 中断向量更新为 kernel_trap_entry
     // 我们已经在内核态了
     u64 trap_entry = (u64)kernel_trap_entry;
     WRITE_CSR(CSR_STVEC, (u64)trap_entry);
- 
+
     current_process->trap_frame_page->epc = READ_CSR(CSR_SEPC); // 更新返回地址
 
     switch (scause){
         case 1: // software interrupt
             break;
         case 8: // syscall
-            if (current_process->is_killed) kexit(-1);
             // 开启中断，陷入内核态时会自动关中断
+            pr_debug("syscall");
             current_process->trap_frame_page->epc += 4;
             interrupt_on(); 
             syscall();
             break;
         case 13: // page_fault
         case 15: // page_fault
-            // page_fault();
+            // page_fault_handle();
+            PANIC("user page fault: pc=%lx stval=%lx", user_pc, stval);
             break;
-        default:
+        default: // Is a device interrupt ?
             if (dev_interrupt() == DeviceError) {
                 PANIC("Unknow error\n");
             }
+    }
+    
+    if (current_process->is_killed){
+        kexit(-1);
     }
 
     process_prepare_return_user();
@@ -102,7 +109,8 @@ u64 user_trap_handler() {
 
 /*
  * device interrupt
- * returns: enum DeviceTrapType, error number in this enum too
+ * returns:
+ *      enum DeviceTrapType, error number in this enum too
  */
 int dev_interrupt() {
     u64 scause = READ_CSR(CSR_SCAUSE);
@@ -128,14 +136,13 @@ void process_prepare_return_user(){
     p->trap_frame_page->kernel_hartid= 0; // 单核
  
     // 内核栈和用户栈共享数据
-    p->trap_frame_page->sp = PROCESS_STACK_PAGE_END;
     p->trap_frame_page->kernel_sp = p->kstack_bottom + PAGE_SIZE;
 
     p->trap_frame_page->user_trap_function = (u64)user_trap_handler;
     p->trap_frame_page->kernel_satp = READ_CSR(CSR_SATP);
-
+    
     WRITE_CSR(CSR_SEPC, p->trap_frame_page->epc);
-    CLEAN_CSR(CSR_SSTATUS, SSTATUS_SPP);    // 开启用户中断许可
+    CLEAN_CSR(CSR_SSTATUS, SSTATUS_SPP);  // 开启用户中断许可
 }
 
 /* 
@@ -143,17 +150,15 @@ void process_prepare_return_user(){
  * 当切换上下文的时候，cpu立刻执行该函数
  */
 void fork_ret(void) {
-    process_prepare_return_user();
+    interrupt_off();
+
     void (*trap_ret)(u64) = (void *)(
         TRAMPOLINE_VADDR + ((u64)user_trap_ret - (u64)trampoline)
     );
 
-    trap_frame_debug(current_process->trap_frame_page);
-
-    // 执行 user_trap_ret，保存上下文，进入用户程序
+    process_prepare_return_user();
     u64 atp = MAKE_SATP(current_process->page_table);
- 
-    // 释放进程的锁
-    cpu.enable_intr = true; // 确保返回一定可以开启中断
+
+    interrupt_on();
     trap_ret(atp);
 }

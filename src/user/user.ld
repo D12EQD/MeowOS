@@ -1,9 +1,11 @@
 OUTPUT_ARCH( "riscv" )
+ENTRY(_start)
 
 SECTIONS {
     . = 0x4000; /* 前4页空着，备用 */
 
     .text : {
+        KEEP(*(.text._start));
         *(.text .text.*)
     }
 

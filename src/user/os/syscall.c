@@ -32,5 +32,6 @@ u64 fork(){
     return syscall(SYS_FORK, 0, 0, 0, 0, 0, 0);
 }
 
-
-
+u64 wait(void* ptr){
+    return syscall(SYS_WAIT, (u64)ptr, 0, 0, 0, 0, 0);
+}

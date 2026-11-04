@@ -28,4 +28,8 @@ enum SyscallNumber {
 u64 fork();
 u64 read(i64 fd, void* buf, u64 buf_len);
 u64 write(i64 fd, void* buf, u64 buf_len);
+u64 wait(void* ptr);
+
 u64 syscall(u64 sysnumber, u64 arg0, u64 arg1, u64 arg2, u64 arg3, u64 arg4, u64 arg5);
+
+

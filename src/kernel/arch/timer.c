@@ -10,7 +10,7 @@
 i64 base_time = -1; // 1s
 void timer_interrupt(){
     u64 time = READ_CSR(CSR_TIME);
-    ASSERT(sbi_set_timer(time + base_time).error == 0); // 1 s
+    ASSERT(sbi_set_timer(time + base_time).error == 0);
     yield();
 }
 
@@ -20,12 +20,11 @@ u64 timer_get_time(){
 }
 
 void timer_init(BootInfo* boot_info){
-    base_time = boot_info->timebase_frequency; // set base_time
-
-    ASSERT(base_time >= 0);
+    base_time = boot_info->timebase_frequency;
+    ASSERT(base_time > 0);
 
     u64 time = READ_CSR(CSR_TIME);
-    ASSERT(sbi_set_timer(time + base_time).error == 0); // 1 s
+    ASSERT(sbi_set_timer(time + base_time).error == 0);
     SET_CSR(CSR_SIE, 1 << 5);
 }
 

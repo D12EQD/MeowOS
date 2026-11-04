@@ -1,11 +1,10 @@
-.section .text
+.section .text._start, "ax"
+
+
 .globl _start
-.globl user_main
 _start:
     call user_main
+    li a7, 8 # exit
+    ecall
 _loop:
     j _loop
-
-.section .rodata
-msg:
-    .asciz "hello from user\n"

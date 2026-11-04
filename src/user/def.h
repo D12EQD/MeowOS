@@ -21,9 +21,6 @@
 // 等待中断，关闭自己
 #define WAITING_INT { _ASM("wfi"); }
 
-#pragma once
-#include "kernel/lib/typedef.h"
-
 #define offsetof(type, member)   __builtin_offsetof(type, member)
 #define align_up(value, align)   __builtin_align_up(value, align)
 #define is_aligned(value, align) __builtin_is_aligned(value, align)
@@ -55,3 +52,27 @@
 #define __set_bit(b, l, r) ((b) |= (((1ULL << ((r) - (l) + 1)) - 1) << (l)))
 
 #define div_ceil(dividend, divisor) (dividend + divisor - 1) / divisor
+
+
+#define NULL ((void*)(0))
+
+typedef signed char         i8;
+typedef unsigned char       u8;
+
+typedef signed short        i16;
+typedef unsigned short      u16;
+
+typedef signed int          i32;
+typedef unsigned int        u32;
+
+typedef signed long         i64;
+typedef unsigned long       u64;
+
+typedef unsigned char       uint8_t;
+typedef unsigned short      uint16_t;
+typedef unsigned int        uint32_t;
+typedef unsigned long long  uint64_t;
+
+typedef u64 size_t;
+
+

@@ -43,9 +43,7 @@ void kernel_init(u64 fdt_address){
     kernel_page_open();
 
     process_init();
-
     timer_init(&boot_info);
-    interrupt_on();
 }
 
 void kernel_start(){

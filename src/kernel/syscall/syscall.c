@@ -32,6 +32,7 @@ static u64 get_arg(int n) {
  */
 u64 sys_write(){
     i64 fd = get_arg(0);
+    ASSERT(fd == 1);
     char *buf = (char *)vaddr_to_paddr(current_process->page_table, get_arg(1));
 
     if (buf == NULL) return -1;
@@ -62,22 +63,24 @@ u64 sys_getpid(void){
 }
 
 u64 sys_mmap(void){
-    
+    return 0;
 }
 
 u64 sys_unmmap(void){
-
+    return 0;
 }
 
 u64 sys_exit(void) {
     u64 return_val = get_arg(0);
-    return return_val;
+    kexit(return_val);
+    return 0;
 }
 
 u64 sys_wait(void) { 
-
-    return 0; 
+    u64 address = get_arg(0);
+    return kwait(address);
 }
+
 
 u64 sys_read(void)   { return 0; }
 u64 sys_open(void)   { return 0; }
