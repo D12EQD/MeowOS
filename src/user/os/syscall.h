@@ -1,10 +1,5 @@
 #pragma once
-
-#include "kernel/arch/def.h"
-#include "kernel/lib/def.h"
-
-int user_main();
-
+#include "user/def.h"
 /*
  * 系统调用清单 —— 唯一真相源
  * 格式：X(大写名, 小写名, 编号)
@@ -20,8 +15,7 @@ int user_main();
     X(EXEC,   exec,   6)         \
     X(WAIT,   wait,   7)         \
     X(EXIT,   exit,   8)         \
-    X(GETPID, getpid, 9)         \
-    X(SBRK,   sbrk,   10)
+    X(GETPID, getpid, 9)
 
 /* 编号 */
 #define __SC_ENUM(upper, lower, num) SYS_##upper = num,
@@ -31,3 +25,7 @@ enum SyscallNumber {
 };
 #undef __SC_ENUM
 
+u64 fork();
+u64 read(i64 fd, void* buf, u64 buf_len);
+u64 write(i64 fd, void* buf, u64 buf_len);
+u64 syscall(u64 sysnumber, u64 arg0, u64 arg1, u64 arg2, u64 arg3, u64 arg4, u64 arg5);

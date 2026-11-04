@@ -45,14 +45,8 @@ void kernel_trap_handler(){
         PANIC("kernel_trap_handler: interrupts not enabled");
     }
     
-    u64 device_from = dev_interrupt();
-    // pr_debug("kernel trap for cause = %lx, pc = %lx, status = %lx, stval = %lx", scause, k_pc, sstatus, stval);
-
-    switch (device_from) {
-        case DevcieTimer:
-            // pr_debug("timer");
-            timer_interrupt();
-            break;
+    if (dev_interrupt() != DeviceError){
+        return;
     }
 
     PANIC("kernel_trap_handler: unknow trap");
@@ -71,21 +65,22 @@ u64 user_trap_handler() {
     if ((sstatus & SSTATUS_SPP) == 1){ 
         PANIC("user_trap_handler : not from supervisor mode");
     }
-    
+ 
     // 中断向量更新为 kernel_trap_entry
     // 我们已经在内核态了
     u64 trap_entry = (u64)kernel_trap_entry;
     WRITE_CSR(CSR_STVEC, (u64)trap_entry);
-    
+ 
     current_process->trap_frame_page->epc = READ_CSR(CSR_SEPC); // 更新返回地址
 
     switch (scause){
         case 1: // software interrupt
             break;
         case 8: // syscall
+            if (current_process->is_killed) kexit(-1);
+            // 开启中断，陷入内核态时会自动关中断
             current_process->trap_frame_page->epc += 4;
-            interrupt_on(); // 开启中断，陷入内核态时会自动关中断
-            // pr_debug("syscall");
+            interrupt_on(); 
             syscall();
             break;
         case 13: // page_fault
@@ -93,12 +88,8 @@ u64 user_trap_handler() {
             // page_fault();
             break;
         default:
-            switch (dev_interrupt()) {
-                case DevcieTimer:
-                    yield();
-                    break;
-                default:
-                    PANIC("Unknow error\n");
+            if (dev_interrupt() == DeviceError) {
+                PANIC("Unknow error\n");
             }
     }
 
@@ -143,8 +134,6 @@ void process_prepare_return_user(){
     p->trap_frame_page->user_trap_function = (u64)user_trap_handler;
     p->trap_frame_page->kernel_satp = READ_CSR(CSR_SATP);
 
-    interrupt_on();
-
     WRITE_CSR(CSR_SEPC, p->trap_frame_page->epc);
     CLEAN_CSR(CSR_SSTATUS, SSTATUS_SPP);    // 开启用户中断许可
 }
@@ -159,14 +148,12 @@ void fork_ret(void) {
         TRAMPOLINE_VADDR + ((u64)user_trap_ret - (u64)trampoline)
     );
 
-    // pr_debug("\n");
     trap_frame_debug(current_process->trap_frame_page);
-    // pr_debug("\n");
 
     // 执行 user_trap_ret，保存上下文，进入用户程序
     u64 atp = MAKE_SATP(current_process->page_table);
-
-    // pr_debug("satp is 0x%lx", atp);
-
+ 
+    // 释放进程的锁
+    cpu.enable_intr = true; // 确保返回一定可以开启中断
     trap_ret(atp);
 }

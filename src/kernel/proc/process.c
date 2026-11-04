@@ -26,7 +26,7 @@ Process *current_process;
 static inline void process_free_page_table(Process* p){
     user_unmap_pages(p->page_table, TRAPFRAME_VADDR, 1, true);
     user_unmap_pages(p->page_table, TRAMPOLINE_VADDR, 1, false);
-    user_unmap_pages(p->page_table, USER_VADDR_START, p->alloc_sz, true);
+    user_unmap_pages(p->page_table, USER_VADDR_START, p->alloc_page_count, true);
     user_unmap_pages(p->page_table, PROCESS_STACK_PAGE_START, PROCESS_STACK_PAGE_COUNT, true);
     free_walk(p->page_table, 2);
 }
@@ -106,6 +106,7 @@ void process_init(){
         process_list[i].state = PROC_UNUSED;
         process_list[i].kstack_bottom = KERNEL_STACK(i); // 该地址已经被内核代码映射完毕
         process_list[i].pid = i;
+        process_list[i].is_killed = false;
     }
     create_idle_process();
 }
@@ -145,7 +146,7 @@ pt_t create_user_process_page(Process *p){
         goto stack_free;
     }
 
-    p->alloc_sz = 0;
+    p->alloc_page_count = 0;
 
     return page_table;
 
@@ -186,7 +187,7 @@ bool first_user_init(Process *proc){
     }
 
     proc->trap_frame_page->epc = USER_VADDR_START;
-    proc->alloc_sz += page_count * PAGE_SIZE;
+    proc->alloc_page_count += page_count ;
     proc->name = "first_process";
     proc->father = NULL;
     return true;
@@ -204,7 +205,6 @@ Process *create_user_process() {
     // 1. init 
     int idx = -1;
     for (int i = 0; i < PROCESS_MAX_COUNT; i ++){
-        // spinlock_acquire(&process_list[i].lock);
         if (process_list[i].state == PROC_UNUSED){
             idx = i;
             break;
@@ -215,7 +215,7 @@ Process *create_user_process() {
     Process *p = &process_list[idx];
 
     p->state = PROC_READY; // 进程状态
-    p->alloc_sz = 0;
+    p->alloc_page_count = 0;
     
     // 2. create page_table for this process
     p->page_table = create_user_process_page(p);
@@ -242,8 +242,9 @@ void free_user_process(Process* p){
     process_free_page_table(p);
     p->page_table = NULL;
     p->trap_frame_page = NULL;
-    p->alloc_sz = 0;
-    p->father = NULL;
+    p->alloc_page_count = 0;
+    p->father = NULL; // ??? 这里需要设置吗？
+    p->is_killed = false;
 }
 
 /*
@@ -251,6 +252,7 @@ void free_user_process(Process* p){
  * 需要调用 spinlock_release 对进程解锁
  */
 Process* find_ready_process(){
+    pr_debug("find_ready_process");
     static int idx;
     idx = (current_process->pid + 1) % PROCESS_MAX_COUNT;
     for (int i = 0; i < PROCESS_MAX_COUNT; i ++, idx = (idx + 1) % PROCESS_MAX_COUNT){
@@ -258,17 +260,11 @@ Process* find_ready_process(){
 
         // 尝试获取当前可以运行进程的锁
         // 如果发现进程持有锁（比如正在运行）跳过
-        // if (!spinlock_try_acquire(&process_list[idx].lock)){
-        //     continue;
-        // }
 
         if (process_list[idx].state == PROC_READY){
-            // pr_cont_debug("find_ready_process %idx : ", idx); process_debug(&process_list[idx]);
-            // spinlock_debug(&process_list[idx].lock);
             return &process_list[idx];
         }
 
-        // spinlock_release(&process_list[idx].lock);
     }
 
     return &process_list[0];
@@ -277,29 +273,35 @@ Process* find_ready_process(){
 
 // Give up the CPU for one scheduling round.
 void yield(void) {
+    pr_debug("yield");
     Process *old = current_process;
     current_process = find_ready_process();
     
     old->state = PROC_READY;
     current_process->state = PROC_RUNNING;
-    
+
     // pr_debug("change the process from pid=%d to pid=%d", old->pid, current_process->pid);
 
-    if (old == current_process) return; // 不切换
+    if (old == current_process){
+        return;  // 不切换
+    }
+
     switch_ctx(&old->context, &current_process->context);
 }
 
 void scheduler(void) {
+    pr_debug("scheduler");
     Process *p;
 
     while (1){
         interrupt_on();
         interrupt_off();
-
+        
         p = find_ready_process();
-        if (p == process_list){
+        pr_debug("find \n");
+        if (p == &process_list[0]){
             pr_warn("cpu is idle");
-            _ASM("wfi");
+            WAITING_INT;
         }else{
             pr_cont_debug("current_process is "); process_debug(current_process);
             p->state = PROC_RUNNING;
@@ -320,7 +322,6 @@ void scheduler(void) {
  *      pid of son
  */
 i64 kfork(const char * name){
-    // TODO : COW 机制
     // TODO:: 上锁确保多进程安全
 
     Process* fa = current_process;
@@ -332,10 +333,10 @@ i64 kfork(const char * name){
     
     // copy normal page
     // pr_debug("copy normal page");
-    copy_page_table(fa->page_table, p->page_table, PAGE_UP( fa->alloc_sz ));
+    copy_page_table(fa->page_table, p->page_table, fa->alloc_page_count);
 
-    ASSERT(p->alloc_sz == 0);
-    p->alloc_sz += fa->alloc_sz;
+    ASSERT(p->alloc_page_count == 0);
+    p->alloc_page_count += fa->alloc_page_count;
  
     // pr_debug("copy stack");
 
@@ -357,6 +358,69 @@ i64 kfork(const char * name){
 Process * get_proc_from_pid(i64 pid){
     if (pid < 0) return NULL;
     return &process_list[pid];
+}
+
+void sleep_prepare(void *chan){
+    current_process->chan = chan;
+}
+
+void sleep(){
+    if (current_process->chan) {
+        current_process->state = PROC_SLEEP;
+        yield();
+    }
+}
+
+/* 等待一个子进程退出，返回一个u64 */
+u64 kwait(u64 exit_number){
+    i64 copy_size = sizeof(current_process->exit_number);
+    bool haschild = false;
+    
+    while (1){
+        for (int i = 1; i < PROCESS_MAX_COUNT; i ++){
+            if (process_list[i].father != current_process) continue;
+            haschild = true;
+            if (process_list[i].state == PROC_ZOMBIE){
+                if (exit_number){
+                    if (copy_to_user(
+                         current_process->page_table, exit_number, 
+                         (void *)(&process_list[i].exit_number), 
+                         copy_size
+                         ) != copy_size){
+                        return -1;
+                    };
+                }
+                free_user_process(&process_list[i]);
+                return i;
+            }
+        }
+
+        // 没找到 
+        // 没孩子直接杀死
+        if (!haschild){
+            kkill(current_process->pid);
+            return -1;
+        }
+
+        // 
+    }
+}
+
+void kkill(i64 pid){
+    if (pid < 0 || pid >= PROCESS_MAX_COUNT) PANIC("killed");
+    Process *p = get_proc_from_pid(pid);
+    p->is_killed = 0;
+    if (p->state == PROC_SLEEP) p->state = PROC_RUNNING;
+}
+
+void kexit(i64 exit_number){
+    Process * p = current_process;
+    PANIC("Exit it");
+}
+
+void wakeup(Process* p){
+    if (!p) PANIC("wake up");
+
 }
 
 // u64 kkill(Process *proc){

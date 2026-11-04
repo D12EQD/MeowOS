@@ -141,7 +141,9 @@ bool mappages(pt_t page_table, u64 va, u64 page_count, u64 paddr, u64 permit_fla
     for (vaddr = va; vaddr < va + page_count * PAGE_SIZE; vaddr += PAGE_SIZE, paddr += PAGE_SIZE) {
         pte = walk(page_table, true, vaddr);
 
-        if (pte == NULL) return false;
+        if (pte == NULL){
+            return false;
+        }
         if unlikely(*pte & PTE_V) PANIC("mappages: remap %lx", (u64)PTE_TO_PADDR(*pte));
 
         *pte = PADDR_TO_PTE(paddr) | permit_flag | PTE_V;
@@ -286,7 +288,7 @@ void user_unmap_pages(pt_t page_table, u64 start, u64 page_count, bool is_free){
     
     for (u64 i = start; i < page_count * PAGE_SIZE + start; i += PAGE_SIZE){
         pte_t * pte = walk(page_table, false, i);
-        if (!pte){
+        if (pte == NULL){
             pr_warn("vaddr %lu do not existed in this page_table\n", i);
             continue;
         }
@@ -317,7 +319,10 @@ bool copy_page_table(pt_t old, pt_t new, u64 page_count){
     
     // pr_debug("copy_page_table old=%lx new=%lx page_count=%ld", old, new, page_count);
     for (i = USER_VADDR_START; i < USER_VADDR_START + page_count * PAGE_SIZE; i += PAGE_SIZE) {
-        if ((pte = walk(old, false, i)) == NULL) continue;
+        if ((pte = walk(old, false, i)) == NULL){
+            PANIC("ERROR");
+            continue;
+        }
         if ((*pte & PTE_V) == 0) continue;
         
         // pr_debug("copy_page_table debug : %ld alloc", i);
@@ -395,6 +400,4 @@ i64 copy_to_user(pt_t page_table, u64 dst_user, char *src, u64 len){
     return (i64)len;
 }
 
-i64 sbrk(i64 move){
-    Process *proc = current_process;
-}
+

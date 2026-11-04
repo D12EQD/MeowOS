@@ -5,6 +5,8 @@
 
 CpuLock cpu; // 管理该cpu互斥资源
 
+#ifdef LOCK_IMPLEMENT
+
 /* 进入关中断临界区 */
 void critical_enter(){
     u64 old = interrupt_off() & SSTATUS_SIE;
@@ -28,16 +30,13 @@ void critical_exit(){
         PANIC("critical_exit error : interrput_depth");
     }
     
-    // 如果可以所有进程或线程退出临界区
-    // 并且上次的中断是开启的
-    // 就开启中断
     if (cpu.interrput_depth == 0 && cpu.enable_intr){
         cpu.enable_intr = 0;
         interrupt_on();
     }
 }
 
-void spinlock_init(SpinLock* lk, const char *name){
+void spinlock_init(SpinLock* lk, char name){
     critical_enter();
     lk->locked = 0; 
     lk->name = name;
@@ -55,17 +54,19 @@ void spinlock_acquire(SpinLock *lk) {
         critical_exit();
         critical_enter();
     }
+    
 }
 
 /* 
  * 尝试获取自旋锁的值，如果发现可以获取到锁则一直等待 (乐观锁的思想)
- * 如果结果为false 不需要调用 spinlock_release 释放锁，失败时不会获取锁
+ * returns : 
+ *      false 不需要调用 spinlock_release 释放锁，失败时不会获取锁
+ *      true 获取到锁
  */
 bool spinlock_try_acquire(SpinLock *lk) {
     critical_enter();
 
     bool ok = __atomic_load_n(&lk->locked,  __ATOMIC_ACQUIRE);
-
     if (ok){
         critical_exit();
         return false;
@@ -75,7 +76,6 @@ bool spinlock_try_acquire(SpinLock *lk) {
         critical_exit();
         critical_enter();
     }
-
     return true;
 }
 
@@ -86,7 +86,10 @@ void spinlock_release(SpinLock *lk) {
     critical_exit();
 }
 
-void spinlock_debug(SpinLock *lk){
-    if (lk->name) pr_cont_debug("%s : ", lk->name);
-    pr_debug("The locked of lock is %u", lk->locked);
+bool spinlock_debug(SpinLock *lk){
+    pr_cont_debug("Lock : %c", lk->name);
+    pr_debug(" locknumber = %u", lk->locked);
+    return false;
 }
+
+#endif

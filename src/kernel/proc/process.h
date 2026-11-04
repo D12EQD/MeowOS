@@ -6,7 +6,7 @@
 #include "kernel/lib/def.h"
 #include "kernel/mm/def.h"
 
-#define PROCESS_MAX_COUNT 4       // 最大进程数量
+#define PROCESS_MAX_COUNT 3       // 最大进程数量
 #define PROCESS_STACK_PAGE_COUNT 4
 
 #define PROCESS_STACK_PAGE_END (KERNEL_STACK(PROCESS_MAX_COUNT) - 3 * PAGE_SIZE)
@@ -15,7 +15,7 @@
 enum proc_state{
     PROC_UNUSED,    // 未使用的进程控制结构
     PROC_READY,     // 可运行的进程
-    PROC_WAIT,      // 阻塞态度
+    PROC_SLEEP,      // 阻塞态度
     PROC_RUNNING,   // 运行态
     PROC_ZOMBIE,    // 僵尸形态
 };
@@ -78,17 +78,19 @@ typedef struct __attribute__((packed)) {
 
 typedef struct __Process{
     int pid;                    // 进程 ID
-    SpinLock lock;              // lock
     enum proc_state state;      // 进程状态
 
     pt_t page_table;            // page table 页表
     TrapFrame* trap_frame_page; // 陷入的保存栈帧
     u64 kstack_bottom;          // 栈指针
 
-    u64 alloc_sz;               // 分配的页面数量 不包括栈 trap_frame_page kernel_stack_page
+    u64 alloc_page_count;       // 分配的页面数量 不包括栈 trap_frame_page kernel_stack_page
     ThreadCtx context;          // 线程上下文
     struct __Process * father;  // 父进程
     const char * name;          // debug name
+    void * chan;                // 睡眠等待对象
+    u64 exit_number;            // 退出码返回值
+    bool is_killed;                // 被杀了
 }Process;
 
 extern Process *current_process;
@@ -99,14 +101,16 @@ Process *create_kernel_process(u64 pc);
 Process *create_user_process();
 pt_t create_user_process_page(Process *p);
 
-void yield();
-void schedule();
-
-void fork_ret();
 [[noreturn]] void scheduler(void);
 
 void process_debug(Process *p);
 void trap_frame_debug(TrapFrame *tf);
-i64 kfork(const char *name);
 Process * get_proc_from_pid(i64 pid);
 bool first_user_init(Process *proc);
+
+void yield();
+void schedule();
+void fork_ret();
+i64 kfork(const char *name);
+void kkill(i64 pid);
+void wakeup(Process* p);

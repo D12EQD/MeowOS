@@ -39,4 +39,5 @@ void puts_n(char *s, u64 count);
     while (1);                                                      \
 } while (0)
 
-#define ASSERT(cond) do{ if unlikely(!( cond )){ PANIC( "assert error " __FILE__ ":%d", __LINE__); } }while(0)
+#define ASSERT(cond) do{ if unlikely(!( cond )){ PANIC( "assert error " __FILE__ ":%ld", __LINE__); } }while(0)
+

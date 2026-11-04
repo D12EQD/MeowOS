@@ -8,7 +8,6 @@
 #include "kernel/lib/string.h"
 #include "kernel/lib/linklist.h"
 #include "kernel/lib/printk.h"
-#include "kernel/lib/bitmap.h"
 
 #include "kernel/proc/lock.h"
 
