@@ -5,7 +5,6 @@
 
 CpuLock cpu; // 管理该cpu互斥资源
 
-#ifdef LOCK_IMPLEMENT
 
 /* 进入关中断临界区 */
 void critical_enter(){
@@ -91,5 +90,3 @@ bool spinlock_debug(SpinLock *lk){
     pr_debug(" locknumber = %u", lk->locked);
     return false;
 }
-
-#endif

@@ -22,7 +22,7 @@ EXTERN_SYMBOL(__free_ram_end);
 static List free_list = {0};
 static List free_ref_list = {0};
 
-SPINLOCK_GLOBAL_INIT(pmm_lock);
+SPINLOCK_GLOBAL_INIT(pmm_lock, 'p');
 
 /* bss 初始化 */
 void bss_init(){

@@ -7,7 +7,10 @@
 
 #include "kernel/mm/page.h"
 
+// TODO : 切换为文件形式的时候需要分配内核缓冲区 目前暂时硬编码测试是否可以正常读写操作
 #define WRITE_CHUNK_SIZE 256
+char buf[WRITE_CHUNK_SIZE];
+
 
 static u64 get_arg(int n) {
     Process *p = current_process;
@@ -36,11 +39,11 @@ u64 sys_write(){
     u64 user_buf = get_arg(1);
     u64 count = get_arg(2);
     u64 done = 0;
-    char buf[WRITE_CHUNK_SIZE];
 
+    // 一批一批写
     while (done < count){
         u64 n = count - done;
-        if (n > sizeof buf) n = sizeof buf;
+        if (n > sizeof(buf)) n = sizeof (buf);
 
         if (copy_from_user(current_process->page_table, buf, (void *)(user_buf + done), n) != (i64)n){
             return done ? done : (u64)-1;

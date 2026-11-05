@@ -32,15 +32,15 @@ static inline void process_free_page_table(Process* p){
 }
 
 void process_debug(Process *p){
-    pr_debug("[");
-    if (p->name) pr_debug("  process name : %s", p->name);
-    pr_debug("  process_debug : pid = %d", p->pid);
-    pr_debug("  context infomation : ra = %lx, sp = %lx", 
-        p->context.ra, p->context.sp);
-    pr_debug("  page_table = %lx, frame_page = %lx", 
-        (u64)p->page_table, (u64)p->trap_frame_page
-    );
-    pr_debug("]\n");
+    // pr_debug("[");
+    // if (p->name) pr_debug("  process name : %s", p->name);
+    // pr_debug("  process_debug : pid = %d", p->pid);
+    // pr_debug("  context infomation : ra = %lx, sp = %lx", 
+    //     p->context.ra, p->context.sp);
+    // pr_debug("  page_table = %lx, frame_page = %lx", 
+    //     (u64)p->page_table, (u64)p->trap_frame_page
+    // );
+    // pr_debug("]\n");
 }
 
 void trap_frame_debug(TrapFrame *tf){
@@ -113,6 +113,7 @@ void process_init(){
 
 /* 创建用户进程页表 */
 pt_t create_user_process_page(Process *p){
+    critical_enter();
     pt_t page_table = user_alloc_page_table(); // user alloc page table 不一定成功
     if (!page_table) goto page_table_free;
 
@@ -149,7 +150,8 @@ pt_t create_user_process_page(Process *p){
 
     p->alloc_page_count = 0;
     p->trap_frame_page->sp = PROCESS_STACK_PAGE_END;
-
+    
+    critical_exit();
     return page_table;
 
 stack_free:
@@ -160,6 +162,8 @@ trampoline_free:
     user_unmap_pages(page_table, TRAMPOLINE_VADDR, 1, false);
 page_table_free:
     if (page_table) free_walk(page_table, 2);
+    critical_exit();
+
     return NULL;
 }
 
@@ -204,6 +208,7 @@ error:
  * 并且更新上下文返回位置为 fork_ret
  */
 Process *create_user_process() {
+    critical_enter();
     // 1. init 
     int idx = -1;
     for (int i = 0; i < PROCESS_MAX_COUNT; i ++){
@@ -228,11 +233,14 @@ Process *create_user_process() {
     p->context.ra = (u64)fork_ret;
     p->context.sp = p->kstack_bottom + PAGE_SIZE;
 
+    critical_exit();
     return p;
 
 free_trap_frame_page:
     kfree(p->trap_frame_page);
 return_null:
+    critical_exit();
+
     return NULL;
 }
 
@@ -260,26 +268,28 @@ void free_user_process(Process* p){
  * 需要调用 spinlock_release 对进程解锁
  */
 Process* find_ready_process(){
-    pr_debug("find_ready_process");
+    critical_enter();
+
+    // pr_debug("find_ready_process");
     int idx = (current_process->pid + 1) % PROCESS_MAX_COUNT;
     for (int i = 0; i < PROCESS_MAX_COUNT; i ++, idx = (idx + 1) % PROCESS_MAX_COUNT){
         if (idx == 0) continue; // 优先跳过空闲进程
 
-        // 尝试获取当前可以运行进程的锁
-        // 如果发现进程持有锁（比如正在运行）跳过
-
         if (process_list[idx].state == PROC_READY){
+            critical_exit();
             return &process_list[idx];
         }
 
     }
+
+    critical_exit();
 
     return &process_list[0];
 }
 
 // Give up the CPU for one scheduling round.
 void yield(void) {
-    pr_debug("yield");
+    // pr_debug("yield");
     Process *old = current_process;
     current_process = find_ready_process();
     
@@ -327,8 +337,6 @@ void scheduler(void) {
  *      pid of son
  */
 i64 kfork(const char * name){
-    // TODO:: 上锁确保多进程安全
-
     Process* fa = current_process;
     Process* p = create_user_process();
     if (p == NULL) return -1;
@@ -367,7 +375,9 @@ Process * get_proc_from_pid(i64 pid){
 }
 
 void sleep_prepare(void *chan){
+    critical_enter();
     current_process->chan = chan;
+    critical_exit();
 }
 
 void sleep(){
@@ -380,7 +390,6 @@ void sleep(){
 /* 等待一个子进程退出，返回一个u64 */
 u64 kwait(u64 exit_number){
     i64 copy_size = sizeof(current_process->exit_number);
-    
     while (1){
         bool haschild = false;
         for (int i = 1; i < PROCESS_MAX_COUNT; i ++){
@@ -406,9 +415,9 @@ u64 kwait(u64 exit_number){
         if (!haschild || current_process->is_killed){
             return -1;
         }
- 
-        // 否则睡觉
+        
         sleep_prepare(current_process);
+
         sleep();
     }
 }
@@ -437,7 +446,7 @@ void kexit(i64 exit_number){
 
     abandon_child(current_process);
     wakeup(current_process->father);
-    pr_debug("current_process->father pid = %d", current_process->father->pid);
+    // pr_debug("current_process->father pid = %d", current_process->father->pid);
 
     current_process->exit_number = exit_number;
     current_process->state = PROC_ZOMBIE;
@@ -460,12 +469,6 @@ void wakeup(void *chan){
     }
 }
 
-// u64 kkill(Process *proc){
-//     if (proc->father == NULL){
-//         pr_warn("poweroff!");
-//         interrupt_off();
-//         WAITING_INT;
-//     }
-//
-//
-// }
+i64 kread(){
+    
+}
