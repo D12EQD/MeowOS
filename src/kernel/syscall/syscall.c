@@ -95,9 +95,16 @@ u64 sys_wait(void) {
     return kwait(address);
 }
 
+u64 sys_palloc(void){
+    u64 page_count = get_arg(0);
+    return kpalloc(page_count);
+}
+
+u64 sys_pfree(void){
+    u64 page_count = get_arg(0);
+    return kpfree(page_count); // bool
+}
 
 u64 sys_read(void)   { return 0; }
 u64 sys_open(void)   { return 0; }
 u64 sys_close(void)  { return 0; }
-u64 sys_fstat(void)  { return 0; }
-u64 sys_exec(void)   { return 0; }

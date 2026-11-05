@@ -191,7 +191,8 @@ bool first_user_init(Process *proc){
         dst_va += n;
         total -= n;
     }
-
+    
+    proc->alloc_page_start = page_count * PAGE_SIZE + USER_VADDR_START;
     proc->trap_frame_page->epc = USER_VADDR_START;
     proc->alloc_page_count += page_count ;
     proc->name = "first_process";
@@ -348,9 +349,8 @@ i64 kfork(const char * name){
     
     // copy normal page
     // pr_debug("copy normal page");
-    if (copy_page_table(fa->page_table, p->page_table, fa->alloc_page_count) == false){
-        free_user_process(p);
-        return -1;
+    if unlikely (copy_page_table(fa->page_table, p->page_table, fa->alloc_page_count) == false){
+        goto copy_page_table_failed;
     }
 
     ASSERT(p->alloc_page_count == 0);
@@ -359,14 +359,24 @@ i64 kfork(const char * name){
     for (u64 va = PROCESS_STACK_PAGE_START; va < PROCESS_STACK_PAGE_END; va += PAGE_SIZE){
         void* fas = (void *)vaddr_to_paddr(fa->page_table, va);
         void* ps = (void *)vaddr_to_paddr(p->page_table, va);
-        memcpy(ps, fas, PAGE_SIZE);
+
+        if unlikely (!fas || !ps) goto memcpy_failed;
+
+        // memcpy 返回 copy size
+        if unlikely (memcpy(ps, fas, PAGE_SIZE) != PAGE_SIZE) goto memcpy_failed;
     }
- 
+
+    p->alloc_page_start = fa->alloc_page_start;
     *(p->trap_frame_page) = *(fa->trap_frame_page);
     p->trap_frame_page->a0 = 0; // 子进程 return 0
     p->father = fa;
 
     return p->pid;
+
+memcpy_failed:
+copy_page_table_failed:
+    free_user_process(p);
+    return -1;
 }
 
 Process * get_proc_from_pid(i64 pid){
@@ -469,6 +479,59 @@ void wakeup(void *chan){
     }
 }
 
+// TODO : test this code
+
+/* 
+ * 分配进程分配的连续内存 
+ * returns: 
+ *      address or 0
+ */
+u64 kpalloc(u64 page_count){
+    if (page_count == 0) return 0;
+    u64 addr = ( current_process->alloc_page_count - 1 ) * PAGE_SIZE + USER_VADDR_START;
+    u64 ret = user_map_pages(
+        current_process->page_table, 
+        addr,
+        page_count,
+        PTE_W | PTE_R
+    );
+    current_process += ret;
+
+    if (ret != page_count){
+        kpfree(ret);
+        return 0;
+    }
+
+    return addr;
+}
+
+// TODO : test this code
+/*
+ * 释放进程分配的连续内存。有可能释放用户的程序页面，该行为也返回false
+ * returns : bool
+ */
+bool kpfree(u64 page_count){
+    if (page_count > current_process->alloc_page_count) goto failed;
+    if (page_count == 0) return true;
+
+    // 不可释放用户的代码page
+    if (current_process->alloc_page_count - page_count <= current_process->alloc_page_start){
+        return false;
+    }
+
+    user_unmap_pages(
+        current_process->page_table,
+        (current_process->alloc_page_count - page_count) * PAGE_SIZE + USER_VADDR_START,
+        page_count, true
+    );
+
+    current_process->alloc_page_count -= page_count;
+    return true;
+failed:
+    current_process->is_killed = true; // 杀
+    return false;
+}
+
+
 i64 kread(){
-    
 }

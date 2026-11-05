@@ -5,17 +5,20 @@
  * 格式：X(大写名, 小写名, 编号)
  * 编号显式指定，保证 ABI 稳定；新增只能往后追加，不能插在中间。
  */
-#define SYSCALL_LIST(X)          \
-    X(READ,   read,   0)         \
-    X(WRITE,  write,  1)         \
-    X(OPEN,   open,   2)         \
-    X(CLOSE,  close,  3)         \
-    X(FSTAT,  fstat,  4)         \
-    X(FORK,   fork,   5)         \
-    X(EXEC,   exec,   6)         \
-    X(WAIT,   wait,   7)         \
-    X(EXIT,   exit,   8)         \
-    X(GETPID, getpid, 9)
+
+
+// ========================== X define ==========================
+#define SYSCALL_LIST(X)             \
+    X(READ,     read,   0)          \
+    X(WRITE,    write,  1)          \
+    X(OPEN,     open,   2)          \
+    X(CLOSE,    close,  3)          \
+    X(FORK,     fork,   5)          \
+    X(WAIT,     wait,   6)          \
+    X(EXIT,     exit,   7)          \
+    X(GETPID,   getpid, 8)          \
+    X(PALLOC,   palloc, 9)          \
+    X(PFREE,    pfree, 10)
 
 /* 编号 */
 #define __SC_ENUM(upper, lower, num) SYS_##upper = num,

@@ -10,19 +10,17 @@
 #include "kernel/lib/def.h"
 
 // ========================== X define ==========================
-#define SYSCALL_LIST(X)          \
-    X(READ,    read,   0)        \
-    X(WRITE,   write,  1)        \
-    X(OPEN,    open,   2)        \
-    X(CLOSE,   close,  3)        \
-    X(FSTAT,   fstat,  4)        \
-    X(FORK,    fork,   5)        \
-    X(EXEC,    exec,   6)        \
-    X(WAIT,    wait,   7)        \
-    X(EXIT,    exit,   8)        \
-    X(GETPID,  getpid, 9)        \
-    X(MMAP,    mmap,   10)       \
-    X(UNMMAP,  unmmap, 11)
+#define SYSCALL_LIST(X)             \
+    X(READ,     read,   0)          \
+    X(WRITE,    write,  1)          \
+    X(OPEN,     open,   2)          \
+    X(CLOSE,    close,  3)          \
+    X(FORK,     fork,   5)          \
+    X(WAIT,     wait,   6)          \
+    X(EXIT,     exit,   7)          \
+    X(GETPID,   getpid, 8)          \
+    X(PALLOC,   palloc, 9)          \
+    X(PFREE,    pfree, 10)
 
 typedef u64 (*syscall_fn_t)(void);
 

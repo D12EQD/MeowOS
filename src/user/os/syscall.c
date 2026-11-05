@@ -35,3 +35,13 @@ u64 fork(){
 u64 wait(void* ptr){
     return syscall(SYS_WAIT, (u64)ptr, 0, 0, 0, 0, 0);
 }
+
+/* 分配连续虚拟内存 */
+u64 palloc(u64 page_count){
+
+}
+
+/* 释放连续虚拟内存 */
+u64 pfree(u64 page_count){
+
+}

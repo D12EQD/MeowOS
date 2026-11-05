@@ -14,13 +14,11 @@ typedef enum {
     FD_NONE, 
     FD_PIPE, 
     FD_INODE, 
-    // FD_DEVICE,
 } FileType;
 
 typedef struct File{
     const struct FileOP *f_op;      // file opeatrion
     struct Inode *f_inode;          // Inode 索引节点
-    const char * path;              // 文件路径或者名字
 } File;
 
 typedef struct Inode {

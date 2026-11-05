@@ -76,6 +76,7 @@ typedef struct __attribute__((packed)) {
   /* 280 */ u64 t6;
 } TrapFrame ;
 
+
 typedef struct __Process{
     int pid;                    // 进程 ID
     enum proc_state state;      // 进程状态
@@ -84,7 +85,12 @@ typedef struct __Process{
     TrapFrame* trap_frame_page; // 陷入的保存栈帧
     u64 kstack_bottom;          // 栈指针
 
-    u64 alloc_page_count;       // 分配的页面数量 不包括栈 trap_frame_page kernel_stack_page
+    u64 alloc_page_start;       // 堆内存开始位置，区分用户程序和用户申请的程序界限
+    u64 alloc_page_count;
+    // 分配的页面数量 不包括栈 trap_frame_page kernel_stack_page
+    // 用户程序 + 用户申请的内存范围 
+    // [ USER_VADDR_START, USER_VADDR_START + ( alloc_page_count - 1 ) * PAGE_SIZE ]
+
     ThreadCtx context;          // 线程上下文
     struct __Process * father;  // 父进程
     const char * name;          // debug name
@@ -116,3 +122,5 @@ void kkill(i64 pid);
 void wakeup(void * p);
 void kexit(i64 exit_number);
 u64 kwait(u64 exit_number);
+u64 kpalloc(u64 page_count);
+bool kpfree(u64 page_count);
