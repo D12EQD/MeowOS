@@ -18,11 +18,22 @@ extern CpuLock cpu;
 
 #define SPINLOCK_GLOBAL_INIT(lock, cname) SpinLock lock = {.locked = 0, .name = cname}
 
+#define LOCK_IMPLEMENT
+#ifndef LOCK_IMPLEMENT
+
+#define spinlock_acquire(l) 0
+#define spinlock_release(l) 0
+#define critical_enter(l) 0
+#define critical_exit(l) 0
+
+#else
+
 void critical_enter();
 void critical_exit();
 
 void spinlock_init(SpinLock* lk, char name);
-void spinlock_acquire(SpinLock *lk);
 bool spinlock_try_acquire(SpinLock *lk);
 void spinlock_release(SpinLock *lk);
+void spinlock_acquire(SpinLock *lk);
 bool spinlock_debug(SpinLock *lk);
+#endif

@@ -6,8 +6,11 @@
 #include "kernel/lib/def.h"
 #include "kernel/mm/def.h"
 
-#define PROCESS_MAX_COUNT 16       // 最大进程数量
+#include "kernel/fs/file.h"
+
+#define PROCESS_MAX_COUNT 16        // 最大进程数量
 #define PROCESS_STACK_PAGE_COUNT 4
+#define PROCESS_MAX_FILE_COUNT 16   // 单个进程最大打开文件数量
 
 #define PROCESS_STACK_PAGE_END (KERNEL_STACK(PROCESS_MAX_COUNT) - 3 * PAGE_SIZE)
 #define PROCESS_STACK_PAGE_START (PROCESS_STACK_PAGE_END - PAGE_SIZE * PROCESS_STACK_PAGE_COUNT)
@@ -85,11 +88,12 @@ typedef struct __Process{
     TrapFrame* trap_frame_page; // 陷入的保存栈帧
     u64 kstack_bottom;          // 栈指针
 
-    u64 alloc_page_start;       // 堆内存开始位置，区分用户程序和用户申请的程序界限
+    /* 
+     * 堆区已分配的页数，只统计 kpalloc / kpfree 管理的页面。
+     * 不包含代码页、数据页、用户栈和 trapframe。
+     * 堆范围：[UESR_HEAP_START, UESR_HEAP_START + alloc_page_count * PAGE_SIZE)
+     */
     u64 alloc_page_count;
-    // 分配的页面数量 不包括栈 trap_frame_page kernel_stack_page
-    // 用户程序 + 用户申请的内存范围 
-    // [ USER_VADDR_START, USER_VADDR_START + ( alloc_page_count - 1 ) * PAGE_SIZE ]
 
     ThreadCtx context;          // 线程上下文
     struct __Process * father;  // 父进程
@@ -97,6 +101,8 @@ typedef struct __Process{
     void * chan;                // 睡眠等待对象
     u64 exit_number;            // 退出码返回值
     bool is_killed;             // 被杀了
+
+    File file_table[PROCESS_MAX_FILE_COUNT]; /* file table */
 }Process;
 
 extern Process *current_process;
@@ -123,4 +129,4 @@ void wakeup(void * p);
 void kexit(i64 exit_number);
 u64 kwait(u64 exit_number);
 u64 kpalloc(u64 page_count);
-bool kpfree(u64 page_count);
+void kpfree(u64 page_count);

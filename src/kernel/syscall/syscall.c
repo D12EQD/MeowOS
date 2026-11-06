@@ -70,6 +70,7 @@ void syscall(){
     } else {
         p->trap_frame_page->a0 = -1;
     }
+
 }
 
 u64 sys_getpid(void){
@@ -97,12 +98,15 @@ u64 sys_wait(void) {
 
 u64 sys_palloc(void){
     u64 page_count = get_arg(0);
-    return kpalloc(page_count);
+    u64 res = kpalloc(page_count);
+    pr_debug("sys_palloc return");
+    return res;
 }
 
 u64 sys_pfree(void){
     u64 page_count = get_arg(0);
-    return kpfree(page_count); // bool
+    kpfree(page_count); // bool
+    return true;
 }
 
 u64 sys_read(void)   { return 0; }

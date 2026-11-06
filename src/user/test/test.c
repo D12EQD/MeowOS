@@ -16,11 +16,13 @@ void test_ctx_init(TestCtx *t) {
     t->note = 0;
 }
 
+/* 执行测试函数 */
 void test_case(TestCtx *t, const char *name) {
     (void)t;
     printf_imple(ANSI_CYAN "\n[ CASE ] %s" ANSI_RESET "\n", name);
 }
 
+/* 判断got是否等于want */
 void test_expect(TestCtx *t, const char *what, i64 got, i64 want) {
     t->total ++;
 
@@ -31,10 +33,13 @@ void test_expect(TestCtx *t, const char *what, i64 got, i64 want) {
     }
 
     t->fail ++;
-    printf_imple(ANSI_RED "[ FAIL ]" ANSI_RESET " %s  got=%d(0x%x) want=%d(0x%x)\n",
-        what, got, (u64)got, want, (u64)want);
+    printf_imple(
+        ANSI_RED "[ FAIL ]" ANSI_RESET " %s  got=%d(0x%x) want=%d(0x%x)\n",
+        what, got, (u64)got, want, (u64)want
+    );
 }
 
+/* 注意输出 */
 void test_note(TestCtx *t, const char *what) {
     t->note ++;
     printf_imple(ANSI_YELLOW "[ NOTE ]" ANSI_RESET " %s\n", what);
@@ -57,8 +62,13 @@ void test_run_all(void) {
 
     printf_imple(ANSI_BRIGHT_GREEN "\n===== MeowOS syscall test suite =====" ANSI_RESET "\n");
 
+    test_page_alloc_and_free(&t);
+    test_global_data_suite(&t);
     test_write_suite(&t);
     test_proc_suite(&t);
+    println("OK");
+    // test_write_suite(&t);
+    // test_proc_suite(&t);
 
     test_summary(&t);
 }

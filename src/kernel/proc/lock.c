@@ -2,8 +2,11 @@
 #include "kernel/arch/def.h"
 
 #include "kernel/proc/lock.h"
+#include "kernel/proc/process.h"
 
 CpuLock cpu; // 管理该cpu互斥资源
+
+#ifdef LOCK_IMPLEMENT
 
 
 /* 进入关中断临界区 */
@@ -90,3 +93,6 @@ bool spinlock_debug(SpinLock *lk){
     pr_debug(" locknumber = %u", lk->locked);
     return false;
 }
+
+
+#endif

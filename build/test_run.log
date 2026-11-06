@@ -1,0 +1,222 @@
+
+OpenSBI v1.9
+   ____                    _____ ____ _____
+  / __ \                  / ____|  _ \_   _|
+ | |  | |_ __   ___ _ __ | (___ | |_) || |
+ | |  | | '_ \ / _ \ '_ \ \___ \|  _ < | |
+ | |__| | |_) |  __/ | | |____) | |_) || |_
+  \____/| .__/ \___|_| |_|_____/|____/_____|
+        | |
+        |_|
+
+Platform Name               : riscv-virtio,qemu
+Platform Features           : medeleg
+Platform HART Count         : 1
+Platform HART Protection    : pmp
+Platform IPI Device         : aclint-mswi
+Platform Timer Device       : aclint-mtimer @ 10000000Hz
+Platform Console Device     : uart8250
+Platform HSM Device         : ---
+Platform PMU Device         : ---
+Platform Reboot Device      : syscon-reboot
+Platform Shutdown Device    : syscon-poweroff
+Platform Suspend Device     : ---
+Platform CPPC Device        : ---
+Firmware Base               : 0x80000000
+Firmware Size               : 329 KB
+Firmware RW Offset          : 0x40000
+Firmware RW Size            : 73 KB
+Firmware Heap Offset        : 0x49000
+Firmware Heap Size          : 37 KB (total), 0 KB (reserved), 14 KB (used), 22 KB (free)
+Firmware Scratch Size       : 4096 B (total), 1536 B (used), 2560 B (free)
+Runtime SBI Version         : 3.0
+Standard SBI Extensions     : time,rfnc,ipi,base,hsm,srst,pmu,dbcn,fwft,legacy,dbtr,sse
+Experimental SBI Extensions : none
+
+Domain0 Name                : root
+Domain0 Init Order          : 0xffffffff
+Domain0 Boot HART           : 0
+Domain0 HARTs               : 0x0*
+Domain0 Region00            : 0x0000000080040000-0x000000008005ffff M: (F,R,W) S/U: ()
+Domain0 Region01            : 0x0000000080000000-0x000000008003ffff M: (F,R,X) S/U: ()
+Domain0 Region02            : 0x0000000000100000-0x0000000000100fff M: (I,R,W) S/U: (R,W)
+Domain0 Region03            : 0x0000000010000000-0x0000000010000fff M: (I,R,W) S/U: (R,W)
+Domain0 Region04            : 0x0000000002000000-0x000000000200ffff M: (I,R,W) S/U: ()
+Domain0 Region05            : 0x000000000c400000-0x000000000c5fffff M: (I,R,W) S/U: (R,W)
+Domain0 Region06            : 0x000000000c000000-0x000000000c3fffff M: (I,R,W) S/U: (R,W)
+Domain0 Region07            : 0x0000000000000000-0xffffffffffffffff M: () S/U: (R,W,X)
+Domain0 Next Address        : 0x0000000080200000
+Domain0 Next Arg1           : 0x0000000082200000
+Domain0 Next Mode           : S-mode
+Domain0 SysReset            : yes
+Domain0 SysSuspend          : yes
+
+Boot HART ID                : 0
+Boot HART Domain            : root
+Boot HART Priv Version      : v1.12
+Boot HART Base ISA          : rv64imafdch
+Boot HART ISA Extensions    : sstc,zicntr,zihpm,zicboz,zicbom,sdtrig,svadu,f,d
+Boot HART PMP Count         : 16
+Boot HART PMP Granularity   : 2 bits
+Boot HART PMP Address Bits  : 54
+Boot HART MHPM Info         : 16 (0x0007fff8)
+Boot HART Debug Triggers    : 2 triggers
+Boot HART MIDELEG           : 0x0000000000001666
+Boot HART MEDELEG           : 0x0000000000f4b509
+scheduler
+current_process is switch to the process : 
+===== MeowOS syscall test suite =====
+
+[ CASE ] test_page_alloc_and_free
+0 : 1
+sys_palloc return
+1 : 2
+sys_palloc return
+2 : 3
+sys_palloc return
+3 : 4
+sys_palloc return
+4 : 5
+sys_palloc return
+5 : 6
+sys_palloc return
+6 : 7
+sys_palloc return
+7 : 8
+sys_palloc return
+8 : 9
+sys_palloc return
+9 : 10
+sys_palloc return
+0 : 1
+1 : 2
+2 : 3
+3 : 4
+4 : 5
+5 : 6
+6 : 7
+7 : 8
+8 : 9
+9 : 10
+0 : 1
+sys_palloc return
+1 : 2
+sys_palloc return
+2 : 3
+sys_palloc return
+3 : 4
+sys_palloc return
+4 : 5
+sys_palloc return
+5 : 6
+sys_palloc return
+6 : 7
+sys_palloc return
+7 : 8
+sys_palloc return
+8 : 9
+sys_palloc return
+9 : 10
+sys_palloc return
+9 : 10
+8 : 9
+7 : 8
+6 : 7
+5 : 6
+4 : 5
+3 : 4
+2 : 3
+1 : 2
+0 : 1
+
+[ CASE ] 全局变量：.bss 零初始化、.data 保留初值
+[ PASS ] .bss 变量初值为 0
+[ PASS ] .data 变量保留初值
+[ PASS ] 写 .bss 后能读回
+[ PASS ] 256 字节 .bss 缓冲区全为 0
+[ PASS ] 写满 256 字节缓冲区后读回末字节
+[ PASS ] 跨 2 页的静态缓冲区可写可读
+
+[ CASE ] write: 返回值应为实际写入的字节数
+0123456789
+[ PASS ] write(1, "0123456789\n", 11) == 11
+
+[ CASE ] write: count 为 0 时返回 0 且不输出
+[ PASS ] write(1, buf, 0) == 0
+[ PASS ] write(1, NULL, 0) == 0
+
+[ CASE ] write: 非法 fd 返回 -1（不能 PANIC）
+[ PASS ] write(-1, buf, 4) == -1
+[ PASS ] write(0, buf, 4) == -1
+[ PASS ] write(2, buf, 4) == -1
+
+[ CASE ] write: 非法用户指针返回 -1
+[ PASS ] write(1, NULL, 8) == -1
+[ PASS ] write(1, 0x3F000 未映射, 8) == -1
+[ PASS ] write(1, 0xffffffff80000000, 8) == -1
+
+[ CASE ] write: 长度超过内核分块大小（走多轮拷贝）
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+[ PASS ] write(1, 300 字节) == 300
+
+[ CASE ] write: 跨页缓冲区必须逐页拷贝
+[ PASS ] 缓冲区起点跨在页边界前 8 字节
+EXPECT>ZZZZZZZZZZZZZZZZZZZZZZZZ<END
+ACTUAL>ZZZZZZZZZZZZZZZZZZZZZZZZ[ PASS ] write(1, 跨页缓冲区, 24) == 24
+<END
+[ NOTE ] ACTUAL 必须和 EXPECT 的 24 个 Z 完全一致，出现乱码即跨页读越界
+
+[ CASE ] fork/getpid: 父返回子 pid、子返回 0
+[ PASS ] 根进程 getpid() == 1
+[ PASS ] fork() 在父进程中返回合法 pid
+[ PASS ] wait() 返回的 pid 等于 fork() 的返回值
+[ PASS ] 子进程里 fork() 返回 0（用退出码 0 回传）
+
+[ CASE ] getpid: 子进程自己的 pid 与 fork 返回值一致
+[ PASS ] wait() 拿到的 pid == 子进程 getpid()
+
+[ CASE ] fork: 三个兄弟进程，pid 与退出码一一对应
+[ PASS ] 三次 fork 拿到三个互不相同的 pid
+[ PASS ] 每次 wait 拿到的退出码都等于该子进程的 pid
+[ PASS ] 三个孩子各被回收一次，没有漏也没有重复
+
+[ CASE ] wait: 退出码透传
+[ PASS ] 退出码 42 被正确回传
+
+[ CASE ] wait: 64 位退出码不被截断
+[ PASS ] 退出码 0xdeadbeef 完整回传
+
+[ CASE ] wait: 传入 NULL 时不写用户内存，仍返回 pid
+[ PASS ] wait(NULL) 返回子进程 pid
+
+[ CASE ] fork: 父子地址空间必须隔离
+[ PASS ] 子进程能读到父进程 fork 前的数据
+[ PASS ] 父进程的栈变量未被写穿
+
+[ CASE ] fork: 三层进程树，孙子的退出码经两层 wait 回传
+[ PASS ] 孩子拿回孙子退出码 7 后正常退出
+
+[ CASE ] fork: 子进程先退出，孙子被过继给根进程
+[ PASS ] 第一次 wait 拿到子进程 A 的退出码 5
+[ PASS ] 第二次 wait 回收被过继的孙子退出码 99
+
+[ CASE ] wait: 非法用户地址不回收子进程，可以重试
+[ PASS ] wait(非法地址) 返回 -1
+[ PASS ] 重试 wait() 仍能回收子进程
+[ PASS ] 退出码 9 没有丢失
+
+[ CASE ] fork: 槽位耗尽时返回 -1，回收后恢复
+[ PASS ] 槽位耗尽后 fork() 返回 -1 而不是崩溃
+[ PASS ] 同时最多 14 个用户进程（16 - idle - 根进程）
+[ PASS ] 全部回收后 fork() 恢复正常
+
+[ CASE ] wait: 没有子进程时应只返回 -1，不能杀死调用者
+child: wait() 没有子进程 -> -1
+[ PASS ] 子进程收到 -1 后仍能继续执行到 exit(55)
+[ PASS ] 父进程正确回收该子进程
+OK
+
+==== TEST SUMMARY pass=43 fail=0 note=1 total=42 ====
+ALL GREEN
+tests done, halting
+current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : current_process is switch to the process : qemu-system-riscv64: terminating on signal 15 from pid 85 (timeout)

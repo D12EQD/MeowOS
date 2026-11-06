@@ -77,6 +77,7 @@ u64 user_trap_handler() {
 
     switch (scause){
         case 1: // software interrupt
+            PANIC("user page fault: pc=%lx stval=%lx", user_pc, stval);
             break;
         case 8: // syscall
             // 开启中断，陷入内核态时会自动关中断
@@ -97,9 +98,10 @@ u64 user_trap_handler() {
     }
     
     if (current_process->is_killed){
+        pr_debug("kill the procress");
         kexit(-1);
     }
-
+    
     process_prepare_return_user();
     u64 satp = MAKE_SATP(current_process->page_table);
     
@@ -129,6 +131,8 @@ int dev_interrupt() {
  */
 void process_prepare_return_user(){
     // 更新中断向量寄存器为 user_trap_entry 需要进入用户态
+    // trap_frame_debug(current_process->trap_frame_page);
+
     u64 trap_entry = TRAMPOLINE_VADDR + ((u64)user_trap_entry - (u64)trampoline);
     WRITE_CSR(CSR_STVEC, trap_entry);
 
@@ -143,6 +147,7 @@ void process_prepare_return_user(){
     
     WRITE_CSR(CSR_SEPC, p->trap_frame_page->epc);
     CLEAN_CSR(CSR_SSTATUS, SSTATUS_SPP);  // 开启用户中断许可
+
 }
 
 /* 
@@ -160,5 +165,6 @@ void fork_ret(void) {
     u64 atp = MAKE_SATP(current_process->page_table);
 
     interrupt_on();
+
     trap_ret(atp);
 }

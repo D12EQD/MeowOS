@@ -261,22 +261,6 @@ u64 user_map_pages(pt_t page_table, u64 vaddr, u64 count, u64 perm){
     return res;
 }
 
-/* 重新分配用户内存，只减少 */
-u64 user_realloc(pt_t page_table, u64 old_size, u64 new_size){
-    if (new_size >= old_size){
-        return old_size;
-    }
-    u64 old_end = PAGE_UP(old_size + USER_VADDR_START);
-    u64 new_end = PAGE_UP(new_size + USER_VADDR_START);
-
-    if (old_end > new_end){
-        u64 count = (old_end - new_end) / PAGE_SIZE;
-        user_unmap_pages(page_table, new_end, count, true);
-    }
-
-    return new_size;
-}
-
 /*
  * 取消映射用户页表
  * is_free 标志是否需要释放页表，调用kfree释放
@@ -310,29 +294,33 @@ void user_unmap_pages(pt_t page_table, u64 start, u64 page_count, bool is_free){
 
 /* 
  * 复制页表内容给另外一个页表 一般用于 fork
+ * start : 起始虚拟地址，必须页对齐
+ * page_count : 复制的页数
  * returns : bool
  */
-bool copy_page_table(pt_t old, pt_t new, u64 page_count){
+bool copy_page_table(pt_t old, pt_t new, u64 start, u64 page_count){
     pte_t *pte;
     u64 i;
     u64 new_page;
     
-    // pr_debug("copy_page_table old=%lx new=%lx page_count=%ld", old, new, page_count);
-    for (i = USER_VADDR_START; i < USER_VADDR_START + page_count * PAGE_SIZE; i += PAGE_SIZE) {
-        if ((pte = walk(old, false, i)) == NULL){
+    // pr_debug("copy_page_table old=%lx new=%lx start=%lx page_count=%ld", old, new, start, page_count);
+    for (i = 0; i < page_count * PAGE_SIZE; i += PAGE_SIZE) {
+        u64 va = start + i;
+
+        if ((pte = walk(old, false, va)) == NULL){
             PANIC("ERROR");
             continue;
         }
         if ((*pte & PTE_V) == 0) continue;
         
-        // pr_debug("copy_page_table debug : %ld alloc", i);
+        // pr_debug("copy_page_table debug : %ld alloc", va);
         // 1. 分配 page
         new_page = (u64)kalloc_page();
         if (!new_page) goto err;
 
         // 2. old_flag -> new_flag
         u64 flag = (u64)GET_PTE_FLAG(*pte);
-        if (!mappages(new, i, 1, new_page, flag)){
+        if (!mappages(new, va, 1, new_page, flag)){
             goto free_page_err;
         }
 
@@ -348,7 +336,7 @@ free_page_err:
     kfree((void *)new_page);
 err:
     pr_debug("copy_page_table error");
-    user_unmap_pages(new, USER_VADDR_START, i / PAGE_SIZE, 1);
+    user_unmap_pages(new, start, i / PAGE_SIZE, true);
     return false;
 }
 

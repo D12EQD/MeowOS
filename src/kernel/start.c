@@ -15,6 +15,8 @@
 #include "kernel/mm/page.h"
 #include "kernel/mm/pmm.h"
 
+#include "kernel/fs/file.h"
+
 EXTERN_SYMBOL( __end_text_section);
 EXTERN_SYMBOL( __trampoline_section_start);
 EXTERN_SYMBOL( __trampoline_section_end);
@@ -62,6 +64,9 @@ void kernel_main(){
     // set_print_filter(K_DEBUG);
     // test_copy_page();
     Process* p = create_user_process();
+
+    PANIC("DirEntry size = %ld", sizeof(DirEntry));
+
     first_user_init(p);
     scheduler();
 }

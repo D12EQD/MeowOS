@@ -28,11 +28,40 @@ enum SyscallNumber {
 };
 #undef __SC_ENUM
 
-u64 fork();
-u64 read(i64 fd, void* buf, u64 buf_len);
-u64 write(i64 fd, void* buf, u64 buf_len);
-u64 wait(void* ptr);
-
 u64 syscall(u64 sysnumber, u64 arg0, u64 arg1, u64 arg2, u64 arg3, u64 arg4, u64 arg5);
 
+static inline u64 sys_getpid_raw(void) {
+    return syscall(SYS_GETPID, 0, 0, 0, 0, 0, 0);
+}
 
+/* 没有返回值：sys_exit 一旦成功就不回来了 */
+static inline void sys_exit_raw(i64 code) {
+    syscall(SYS_EXIT, (u64)code, 0, 0, 0, 0, 0);
+}
+
+
+static inline u64 write(i64 fd, void* buf, u64 buf_len){
+    return syscall(SYS_WRITE, (u64)fd, (u64)buf, buf_len, 0, 0, 0);
+}
+
+static inline u64 read(i64 fd, void* buf, u64 buf_len){
+    return syscall(SYS_READ, (u64)fd, (u64)buf, buf_len, 0, 0, 0);
+}
+
+static inline u64 fork(){
+    return syscall(SYS_FORK, 0, 0, 0, 0, 0, 0);
+}
+
+static inline u64 wait(void* ptr){
+    return syscall(SYS_WAIT, (u64)ptr, 0, 0, 0, 0, 0);
+}
+
+/* 分配连续虚拟内存 */
+static inline void* palloc(u64 page_count){
+    return (void *)syscall(SYS_PALLOC, page_count, 0, 0, 0, 0, 0);
+}
+
+/* 释放连续虚拟内存 */
+static inline void pfree(u64 page_count){
+    syscall(SYS_PFREE, page_count, 0, 0, 0, 0, 0);
+}

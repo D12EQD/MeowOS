@@ -90,7 +90,7 @@ u64 vaddr_to_paddr(pt_t page_table, u64 vaddr);
 i64 copy_from_user(pt_t page_table, void *dst, void* src_user, u64 len);
 i64 copy_to_user(pt_t page_table, u64 dst_user, char *src, u64 len);
 
-bool copy_page_table(pt_t old, pt_t new, u64 page_count);
+bool copy_page_table(pt_t old, pt_t new, u64 start, u64 page_count);
 
 extern pt_t kernel_page_table; /* 内核页目录 */
 

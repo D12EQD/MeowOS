@@ -20,28 +20,3 @@ u64 syscall(u64 sysnumber, u64 arg0, u64 arg1, u64 arg2, u64 arg3, u64 arg4, u64
     return a0;
 }
 
-u64 write(i64 fd, void* buf, u64 buf_len){
-    return syscall(SYS_WRITE, (u64)fd, (u64)buf, buf_len, 0, 0, 0);
-}
-
-u64 read(i64 fd, void* buf, u64 buf_len){
-    return syscall(SYS_READ, (u64)fd, (u64)buf, buf_len, 0, 0, 0);
-}
-
-u64 fork(){
-    return syscall(SYS_FORK, 0, 0, 0, 0, 0, 0);
-}
-
-u64 wait(void* ptr){
-    return syscall(SYS_WAIT, (u64)ptr, 0, 0, 0, 0, 0);
-}
-
-/* 分配连续虚拟内存 */
-u64 palloc(u64 page_count){
-
-}
-
-/* 释放连续虚拟内存 */
-u64 pfree(u64 page_count){
-
-}

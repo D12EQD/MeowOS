@@ -1,6 +1,8 @@
 #include "kernel/proc/process.h"
 #include "kernel/proc/lock.h"
 
+#include "kernel/lib/error.h"
+
 #include "kernel/arch/def.h"
 #include "kernel/arch/trap.h"
 
@@ -12,6 +14,7 @@
 #include "kernel/mm/page.h"
 #include "kernel/mm/pmm.h"
 
+
 EXTERN_SYMBOL(trampoline); // 蹦床代码，用于页表映射
 EXTERN_SYMBOL(_binary_user_bin_start);
 EXTERN_SYMBOL(_binary_user_bin_end);
@@ -20,27 +23,34 @@ EXTERN_FUNC(void switch_ctx(ThreadCtx *old, ThreadCtx* new));
 EXTERN_FUNC(void user_trap_entry(void *));
 EXTERN_FUNC(void user_trap_ret(void *));
 
+// 堆顶：下一个可以分配的页面的虚拟地址
+#define PROC_TOP_VADDR(page_count) (UESR_HEAP_START + (page_count) * PAGE_SIZE)
+
 Process process_list[PROCESS_MAX_COUNT];
 Process *current_process;
 
 static inline void process_free_page_table(Process* p){
     user_unmap_pages(p->page_table, TRAPFRAME_VADDR, 1, true);
     user_unmap_pages(p->page_table, TRAMPOLINE_VADDR, 1, false);
-    user_unmap_pages(p->page_table, USER_VADDR_START, p->alloc_page_count, true);
+
+    user_unmap_pages(p->page_table, UESR_DATA_PAGE_START, USER_DATA_PAGE_COUNT, true);
+    user_unmap_pages(p->page_table, USER_CODE_START, USER_CODE_PAGE_COUNT, true);
+    user_unmap_pages(p->page_table, UESR_HEAP_START, p->alloc_page_count, true);
+
     user_unmap_pages(p->page_table, PROCESS_STACK_PAGE_START, PROCESS_STACK_PAGE_COUNT, true);
     free_walk(p->page_table, 2);
 }
 
 void process_debug(Process *p){
-    // pr_debug("[");
-    // if (p->name) pr_debug("  process name : %s", p->name);
-    // pr_debug("  process_debug : pid = %d", p->pid);
-    // pr_debug("  context infomation : ra = %lx, sp = %lx", 
-    //     p->context.ra, p->context.sp);
-    // pr_debug("  page_table = %lx, frame_page = %lx", 
-    //     (u64)p->page_table, (u64)p->trap_frame_page
-    // );
-    // pr_debug("]\n");
+    pr_debug("[");
+    if (p->name) pr_debug("  process name : %s", p->name);
+    pr_debug("  process_debug : pid = %d", p->pid);
+    pr_debug("  context infomation : ra = %lx, sp = %lx", 
+        p->context.ra, p->context.sp);
+    pr_debug("  page_table = %lx, frame_page = %lx", 
+        (u64)p->page_table, (u64)p->trap_frame_page
+    );
+    pr_debug("]\n");
 }
 
 void trap_frame_debug(TrapFrame *tf){
@@ -136,7 +146,7 @@ pt_t create_user_process_page(Process *p){
         goto trampoline_free;
     }
 
-    // 3. 用户栈
+    // 3. 用户栈 放在高位，不算入 alloc_page_count
     u64 page_count = user_map_pages(
         page_table, 
         PROCESS_STACK_PAGE_START,
@@ -167,34 +177,79 @@ page_table_free:
     return NULL;
 }
 
+/*
+ * 把用户镜像中一段连续内容逐页拷进目标页表映射到的物理页
+ * src 与 dst_va 一一对应：
+ *      src[0]      -> dst_va
+ *      src[n]      -> dst_va + n
+ */
+static bool copy_image_to_user(pt_t page_table, u64 dst_va, const void *src, u64 len){
+    const u8 *s = (const u8 *)src;
+    u64 done = 0;
+
+    while (done < len){
+        u64 n = len - done;
+        if (n > PAGE_SIZE) n = PAGE_SIZE;
+
+        u64 dst_pa = vaddr_to_paddr(page_table, dst_va + done);
+        if unlikely (!dst_pa) return false;
+        if unlikely (memcpy((void *)dst_pa, s + done, n) != n) return false;
+
+        done += n;
+    }
+
+    return true;
+}
+
+/* 
+ * 初始化第一个用户进程
+ *
+ * 用户地址空间布局（由 user.ld 固定，宏见 mm/def.h）：
+ *      [0x0000, 0x1000) 未映射，用作 NULL 陷阱页
+ *      [0x1000, 0x4000) 静态数据 .data / .bss，可读写不可执行
+ *      [0x4000,  x+1  ) 代码 .text / .rodata，可执行不可写
+ *      [x + 1,  x + 2 ) 未映射，guard 页
+ *      [x + 2,  ...   ) 堆，由 kpalloc 分配
+ */
 bool first_user_init(Process *proc){
     ASSERT(proc->pid == 1);
     ASSERT(proc->page_table);
     pt_t page_table = proc->page_table;
 
-    // 用户程序 copy
-    u64 page_count = (_binary_user_bin_end - _binary_user_bin_start + PAGE_SIZE - 1) / PAGE_SIZE;
-    if (page_count != user_map_pages(page_table, USER_VADDR_START, page_count, PTE_R | PTE_X)){
+    const u8 *bin = (const u8 *)_binary_user_bin_start;
+    u64 bin_size = USER_IMAGE_SIZE;
+
+    // 校验镜像
+    u32 magic = 0;
+    memcpy(&magic, bin, sizeof(magic));
+    ASSERT(magic == USER_IMAGE_MAGIC);
+
+    // 镜像至少要覆盖数据区
+    ASSERT(bin_size > USER_DATA_PAGE_COUNT * PAGE_SIZE);
+
+    // 1. 数据页：可读可写，不可执行
+    if (user_map_pages(page_table, UESR_DATA_PAGE_START, USER_DATA_PAGE_COUNT, PTE_R | PTE_W)
+            != USER_DATA_PAGE_COUNT){
         goto error;
     }
 
-    // 复制用户程序到用户页表映射到的物理页
-    u64 total = (u64)_binary_user_bin_end - (u64)_binary_user_bin_start;
-    u64 src  = (u64)_binary_user_bin_start;
-    u64 dst_va = USER_VADDR_START;
-    while (total > 0) {
-        u64 n = (total > PAGE_SIZE) ? PAGE_SIZE : total;
-        u64 dst_pa = vaddr_to_paddr(page_table, dst_va);
-        if (!dst_pa) goto error;
-        memcpy((void *)dst_pa, (void *)src, n);
-        src += n;
-        dst_va += n;
-        total -= n;
+    // 2. 代码页：从 0x4000 起，可读可执行，不可写
+    if (user_map_pages(page_table, USER_CODE_START, USER_CODE_PAGE_COUNT, PTE_R | PTE_X)
+            != USER_CODE_PAGE_COUNT){
+        goto error;
     }
-    
-    proc->alloc_page_start = page_count * PAGE_SIZE + USER_VADDR_START;
-    proc->trap_frame_page->epc = USER_VADDR_START;
-    proc->alloc_page_count += page_count ;
+
+    // 3. 整段拷贝：数据页和代码页在镜像里连续，一次拷完
+    // （x + 1 的 guard 页在这里没有被映射，堆起点 UESR_HEAP_START 自然落在它后面）
+    if (!copy_image_to_user(page_table, UESR_VADDR_START, bin, bin_size)){
+        goto error;
+    }
+
+    ASSERT(vaddr_to_paddr(page_table, USER_GUARD_VADDR) == 0);
+    ASSERT(UESR_HEAP_START == USER_GUARD_VADDR + PAGE_SIZE);
+
+    proc->trap_frame_page->epc = USER_CODE_START;
+    proc->alloc_page_count = 0;
     proc->name = "first_process";
     proc->father = NULL;
     return true;
@@ -319,12 +374,12 @@ void scheduler(void) {
             pr_warn("cpu is idle");
             WAITING_INT;
         }else{
-            pr_cont_debug("current_process is "); process_debug(current_process);
+            // pr_cont_debug("current_process is "); process_debug(current_process);
             p->state = PROC_RUNNING;
             Process *old = current_process;
 
             // debug
-            pr_cont_debug("switch to the process : "); process_debug(p);
+            // pr_cont_debug("switch to the process : "); process_debug(p);
 
             current_process = p;
             switch_ctx(&old->context, &current_process->context);
@@ -344,17 +399,31 @@ i64 kfork(const char * name){
 
     p->name = name;
 
-    process_debug(fa);
-    process_debug(p);
+    // process_debug(fa);
+    // process_debug(p);
     
     // copy normal page
     // pr_debug("copy normal page");
-    if unlikely (copy_page_table(fa->page_table, p->page_table, fa->alloc_page_count) == false){
+    // 1. data
+    if unlikely (copy_page_table(
+            fa->page_table, p->page_table, UESR_VADDR_START, USER_DATA_PAGE_COUNT) == false){
+        goto copy_page_table_failed;
+    }
+
+    // 2. code
+    if unlikely (copy_page_table(
+            fa->page_table, p->page_table, USER_CODE_START, USER_CODE_PAGE_COUNT) == false){
+        goto copy_page_table_failed;
+    }
+
+    // 3. heap
+    if unlikely (copy_page_table(
+            fa->page_table, p->page_table, UESR_HEAP_START, fa->alloc_page_count) == false){
         goto copy_page_table_failed;
     }
 
     ASSERT(p->alloc_page_count == 0);
-    p->alloc_page_count += fa->alloc_page_count;
+    p->alloc_page_count = fa->alloc_page_count;
  
     for (u64 va = PROCESS_STACK_PAGE_START; va < PROCESS_STACK_PAGE_END; va += PAGE_SIZE){
         void* fas = (void *)vaddr_to_paddr(fa->page_table, va);
@@ -366,7 +435,8 @@ i64 kfork(const char * name){
         if unlikely (memcpy(ps, fas, PAGE_SIZE) != PAGE_SIZE) goto memcpy_failed;
     }
 
-    p->alloc_page_start = fa->alloc_page_start;
+    // TODO : fork 时文件表复制指针并 f_ref ++，父子共享 offset
+
     *(p->trap_frame_page) = *(fa->trap_frame_page);
     p->trap_frame_page->a0 = 0; // 子进程 return 0
     p->father = fa;
@@ -400,18 +470,21 @@ void sleep(){
 /* 等待一个子进程退出，返回一个u64 */
 u64 kwait(u64 exit_number){
     i64 copy_size = sizeof(current_process->exit_number);
+
+    sleep_prepare(current_process);
+
     while (1){
         bool haschild = false;
         for (int i = 1; i < PROCESS_MAX_COUNT; i ++){
             if (process_list[i].father != current_process) continue;
             haschild = true;
+
+            // 找 zombie
             if (process_list[i].state == PROC_ZOMBIE){
                 if (exit_number){
-                    if (copy_to_user(
-                        current_process->page_table, exit_number, 
-                        (void *)(&process_list[i].exit_number), 
-                        copy_size
-                    ) != copy_size){
+                    if (copy_to_user(current_process->page_table, exit_number,  
+                        (void *)(&process_list[i].exit_number), copy_size) != copy_size) 
+                    {
                         // 复制失败
                         return -1;
                     };
@@ -425,8 +498,6 @@ u64 kwait(u64 exit_number){
         if (!haschild || current_process->is_killed){
             return -1;
         }
-        
-        sleep_prepare(current_process);
 
         sleep();
     }
@@ -479,59 +550,57 @@ void wakeup(void *chan){
     }
 }
 
-// TODO : test this code
 
 /* 
  * 分配进程分配的连续内存 
  * returns: 
- *      address or 0
+ *      success : void* address 分配开始的地址
+ *      failed : 0
  */
 u64 kpalloc(u64 page_count){
     if (page_count == 0) return 0;
-    u64 addr = ( current_process->alloc_page_count - 1 ) * PAGE_SIZE + USER_VADDR_START;
+    u64 addr = PROC_TOP_VADDR(current_process->alloc_page_count);
+
     u64 ret = user_map_pages(
         current_process->page_table, 
         addr,
         page_count,
         PTE_W | PTE_R
     );
-    current_process += ret;
+    current_process->alloc_page_count += ret;
 
     if (ret != page_count){
-        kpfree(ret);
+        kpfree(ret); // 其中会 current_process->alloc_page_count -= ret;
         return 0;
     }
 
     return addr;
 }
 
-// TODO : test this code
 /*
- * 释放进程分配的连续内存。有可能释放用户的程序页面，该行为也返回false
- * returns : bool
+ * 释放进程堆区最后 page_count 页（栈式释放，必须与 kpalloc 顺序匹配）
  */
-bool kpfree(u64 page_count){
+void kpfree(u64 page_count){
+    if (page_count == 0) return;
     if (page_count > current_process->alloc_page_count) goto failed;
-    if (page_count == 0) return true;
 
-    // 不可释放用户的代码page
-    if (current_process->alloc_page_count - page_count <= current_process->alloc_page_start){
-        return false;
-    }
 
     user_unmap_pages(
         current_process->page_table,
-        (current_process->alloc_page_count - page_count) * PAGE_SIZE + USER_VADDR_START,
+        PROC_TOP_VADDR(current_process->alloc_page_count - page_count),
         page_count, true
     );
 
     current_process->alloc_page_count -= page_count;
-    return true;
+    return;
+
 failed:
     current_process->is_killed = true; // 杀
-    return false;
+    current_process->exit_number = ERR_MEM;
+    return;
 }
 
 
 i64 kread(){
 }
+

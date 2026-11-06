@@ -33,7 +33,8 @@ void test_write_suite(TestCtx *t) {
 
     test_case(t, "write: 非法用户指针返回 -1");
     test_expect(t, "write(1, NULL, 8) == -1", (i64)write(1, NULL, 8), -1);
-    test_expect(t, "write(1, 0x2000 未映射, 8) == -1", (i64)write(1, (void *)0x2000, 8), -1);
+    /* 0x2000 现在是静态数据页（可读写），换成仍未被映射的地址 */
+    test_expect(t, "write(1, 0x3F000 未映射, 8) == -1", (i64)write(1, (void *)0x3F000, 8), -1);
     test_expect(t, "write(1, 0xffffffff80000000, 8) == -1",
         (i64)write(1, (void *)0xffffffff80000000UL, 8), -1);
 
