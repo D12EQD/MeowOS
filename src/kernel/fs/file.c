@@ -7,11 +7,8 @@
 /*
  * If I is a system file descriptors, I = file_table[I].
  * If I is a user file descriptors, I = file_table[I] too.
- * 我不在乎安全
+ * It is not safe,
  */
-
-
-
 Inode inode_table[FS_MAX_INODE_COUNT];
 File file_table[FS_MAX_INODE_COUNT];
 
@@ -87,15 +84,15 @@ failed:
     return NULL;
 }
 
-/* 将son_inode 插入父亲下 */
-bool insert_dir_entry(Inode * fa, Inode* son, const char *name){
+/* 将 son 插入 fa 下 */
+bool insert_dir_entry(Inode * fa, Inode* son, StringView sv){
     critical_enter();
     ASSERT(fa->mode == INODE_DIR);
     DirEntry* d = (DirEntry*)fa->vaddr;
     for (u64 i = 0; i < fa->size / sizeof(DirEntry); i ++){
         if (d[i].inode == NULL){
             d[i].inode = son;
-            strcpy(d[i].name, name);
+            sv_to_cstr_buf(sv, d[i].name, sv.count);
             critical_exit();
             return true;
         }
@@ -104,7 +101,8 @@ bool insert_dir_entry(Inode * fa, Inode* son, const char *name){
     return false;
 }
 
-bool free_dir_entry(Inode *inode){
+/* 释放一个文件目录项 不释放inode */
+bool remove_dir_entry(Inode *inode){
     critical_enter();
     DirEntry* d = (DirEntry*)inode->vaddr;
     for (u64 i = 0; i < inode->size / sizeof(DirEntry); i ++){
@@ -117,6 +115,10 @@ bool free_dir_entry(Inode *inode){
     }
     critical_exit();
     return false;
+}
+
+DirEntry* find_dir_entry(StringView sv){
+
 }
 
 void free_inode(Inode *inode){
