@@ -11,16 +11,22 @@
 
 // ========================== X define ==========================
 #define SYSCALL_LIST(X)             \
-    X(READ,     read,   0)          \
-    X(WRITE,    write,  1)          \
-    X(OPEN,     open,   2)          \
-    X(CLOSE,    close,  3)          \
-    X(FORK,     fork,   5)          \
-    X(WAIT,     wait,   6)          \
-    X(EXIT,     exit,   7)          \
-    X(GETPID,   getpid, 8)          \
-    X(PALLOC,   palloc, 9)          \
-    X(PFREE,    pfree, 10)
+    X(READ,     read,    0)         \
+    X(WRITE,    write,   1)         \
+    X(OPEN,     open,    2)         \
+    X(CLOSE,    close,   3)         \
+    X(FORK,     fork,    5)         \
+    X(WAIT,     wait,    6)         \
+    X(EXIT,     exit,    7)         \
+    X(GETPID,   getpid,  8)         \
+    X(PALLOC,   palloc,  9)         \
+    X(PFREE,    pfree,  10)         \
+    X(MKDIR,    mkdir,  11)         \
+    X(DUP,      dup,    12)         \
+    X(DUP2,     dup2,   13)         \
+    X(READDIR,  readdir, 14)        \
+    X(UNLINK,   unlink, 15)         \
+    X(PIPE,     pipe,   16)
 
 typedef u64 (*syscall_fn_t)(void);
 

@@ -45,13 +45,12 @@
 #define _ASM __asm__ __volatile__
 #endif
 
+/* ================= math ================= */
 #define max(a, b) (( a ) > ( b ) ? ( a ) : ( b ))
 #define min(a, b) (( a ) < ( b ) ? ( a ) : ( b ))
 
 #define __get_bit(b, l, r) (((b) >> (l)) & ((1ULL << ((r) - (l) + 1)) - 1))
 #define __set_bit(b, l, r) ((b) |= (((1ULL << ((r) - (l) + 1)) - 1) << (l)))
-
-#define div_ceil(dividend, divisor) (dividend + divisor - 1) / divisor
 
 
 #define NULL ((void*)(0))
@@ -75,4 +74,5 @@ typedef unsigned long long  uint64_t;
 
 typedef u64 size_t;
 
+#define NULL ((void*)(0))
 #define PAGE_SIZE 4096

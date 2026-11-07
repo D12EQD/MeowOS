@@ -14,6 +14,7 @@
 #include "kernel/mm/page.h"
 #include "kernel/mm/pmm.h"
 
+int proc_fd_table[PROCESS_MAX_COUNT][FS_MAX_FILE_COUNT]; // 进程打开文件表空为 -1
 
 EXTERN_SYMBOL(trampoline); // 蹦床代码，用于页表映射
 EXTERN_SYMBOL(_binary_user_bin_start);
@@ -30,6 +31,7 @@ Process process_list[PROCESS_MAX_COUNT];
 Process *current_process;
 
 static inline void process_free_page_table(Process* p){
+    critical_enter();
     user_unmap_pages(p->page_table, TRAPFRAME_VADDR, 1, true);
     user_unmap_pages(p->page_table, TRAMPOLINE_VADDR, 1, false);
 
@@ -39,6 +41,7 @@ static inline void process_free_page_table(Process* p){
 
     user_unmap_pages(p->page_table, PROCESS_STACK_PAGE_START, PROCESS_STACK_PAGE_COUNT, true);
     free_walk(p->page_table, 2);
+    critical_exit();
 }
 
 void process_debug(Process *p){
@@ -104,8 +107,7 @@ void trap_frame_debug(TrapFrame *tf){
 }
 
 void create_idle_process(){
-    // 0 号为空闲进程
-    // TODO : 该进程需要做更多事情
+    // 0 号为空闲进程 纯占位置
     current_process = &process_list[0];
     current_process->state = PROC_READY;
     current_process->pid = 0;
@@ -117,6 +119,7 @@ void process_init(){
         process_list[i].kstack_bottom = KERNEL_STACK(i); // 该地址已经被内核代码映射完毕
         process_list[i].pid = i;
         process_list[i].is_killed = false;
+        memset(&proc_fd_table[i], -1, sizeof(int) * FS_MAX_FILE_COUNT);
     }
     create_idle_process();
 }
@@ -180,8 +183,8 @@ page_table_free:
 /*
  * 把用户镜像中一段连续内容逐页拷进目标页表映射到的物理页
  * src 与 dst_va 一一对应：
- *      src[0]      -> dst_va
- *      src[n]      -> dst_va + n
+ *      src[0] -> dst_va
+ *      src[n] -> dst_va + n
  */
 static bool copy_image_to_user(pt_t page_table, u64 dst_va, const void *src, u64 len){
     const u8 *s = (const u8 *)src;
@@ -245,6 +248,8 @@ bool first_user_init(Process *proc){
         goto error;
     }
 
+    // 4. init file TODO : 
+
     ASSERT(vaddr_to_paddr(page_table, USER_GUARD_VADDR) == 0);
     ASSERT(UESR_HEAP_START == USER_GUARD_VADDR + PAGE_SIZE);
 
@@ -301,9 +306,12 @@ return_null:
 }
 
 /*
- * 释放一个用户进程 释放该用户分配的页表
+ * 释放一个用户进程
+ * 该操作会释放该用户分配的页表 和 unref 打开文件表中的文件
  */
 void free_user_process(Process* p){
+    critical_enter();
+
     p->state = PROC_UNUSED;
     process_free_page_table(p);
 
@@ -311,12 +319,22 @@ void free_user_process(Process* p){
     int pid = p->pid;
     memset(p, 0, sizeof(Process));
 
-    // reinit
     p->state = PROC_UNUSED;
     p->kstack_bottom = KERNEL_STACK(pid);
     p->pid = pid;
-    p->is_killed = false;
+    
+    for (int i = 0; i < FS_MAX_FILE_COUNT; i ++){
+        int *fd = &proc_fd_table[p->pid][i];
+        if (*fd < 0) continue;
 
+        File* file = get_file_from_fd(*fd); 
+        ASSERT(file); // TEST : 正常情况一定有这个文件
+
+        unref_file(file);
+        *fd = -1;
+    }
+
+    critical_exit();
 }
 
 /*
@@ -404,6 +422,7 @@ i64 kfork(const char * name){
     
     // copy normal page
     // pr_debug("copy normal page");
+
     // 1. data
     if unlikely (copy_page_table(
             fa->page_table, p->page_table, UESR_VADDR_START, USER_DATA_PAGE_COUNT) == false){
@@ -436,6 +455,14 @@ i64 kfork(const char * name){
     }
 
     // TODO : fork 时文件表复制指针并 f_ref ++，父子共享 offset
+    
+    for (int i = 0; i < FS_MAX_FILE_COUNT; i ++){
+        int fa_fd = proc_fd_table[fa->pid][i];
+        File * file = get_file_from_fd(fa_fd);
+
+        if (!file) continue;
+        proc_fd_table[p->pid][i] = proc_fd_table[fa->pid][i];
+    }
 
     *(p->trap_frame_page) = *(fa->trap_frame_page);
     p->trap_frame_page->a0 = 0; // 子进程 return 0
@@ -600,6 +627,9 @@ failed:
     return;
 }
 
+File* proc_get_file(Process* proc, u64 fd){
+    return get_file_from_fd(proc_fd_table[proc->pid][fd]);
+}
 
 i64 kread(){
 }

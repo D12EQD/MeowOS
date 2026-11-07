@@ -109,6 +109,39 @@ u64 sys_pfree(void){
     return true;
 }
 
-u64 sys_read(void)   { return 0; }
-u64 sys_open(void)   { return 0; }
-u64 sys_close(void)  { return 0; }
+u64 sys_read(void){ 
+    return 0; 
+}
+
+u64 sys_open(void){ 
+    return 0; 
+}
+
+u64 sys_close(void){ 
+    return 0; 
+}
+
+u64 sys_mkdir(void){
+    return 0;
+}
+
+u64 sys_dup(){
+    return 0;
+}
+
+u64 sys_dup2(){
+    return 0;
+}
+
+u64 sys_readdir(){
+    return 0;
+}
+
+u64 sys_unlink(){
+    return 0;
+}
+
+u64 sys_pipe(){
+    return 0;
+}
+

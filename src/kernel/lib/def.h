@@ -30,5 +30,4 @@
 
 #define __get_bit(b, l, r) (((b) >> (l)) & ((1ULL << ((r) - (l) + 1)) - 1))
 #define __set_bit(b, l, r) ((b) |= (((1ULL << ((r) - (l) + 1)) - 1) << (l)))
-
-#define div_ceil(dividend, divisor) (dividend + divisor - 1) / divisor
+#define __lowbit(x) ((x) & (-x))

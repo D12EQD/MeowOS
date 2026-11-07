@@ -9,19 +9,19 @@ CpuLock cpu; // 管理该cpu互斥资源
 #ifdef LOCK_IMPLEMENT
 
 
-/* 进入关中断临界区 */
+/* 可重入 进入关中断临界区 */
 void critical_enter(){
     u64 old = interrupt_off() & SSTATUS_SIE;
 
     if (cpu.interrput_depth == 0){
-        // 首次进入临界区
-        cpu.enable_intr = (old != 0);
+        // 首次进入临界区 记录是否可以关中断
         // status寄存器的sie位置为 1 说明可以开启中断
+        cpu.enable_intr = (old != 0);
     }
     cpu.interrput_depth ++;
 }
 
-/* 退出关中断临界区 */
+/* 可重入 退出关中断临界区 */
 void critical_exit(){
     u64 sie = 0;
     // 发现进入关中断临界区没有进入直接退出
