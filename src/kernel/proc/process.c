@@ -1,6 +1,6 @@
 #include "kernel/proc/process.h"
 #include "kernel/proc/lock.h"
-
+#include "kernel/arch/trap.h"
 #include "kernel/lib/error.h"
 
 #include "kernel/arch/def.h"
@@ -13,8 +13,6 @@
 #include "kernel/mm/def.h"
 #include "kernel/mm/page.h"
 #include "kernel/mm/pmm.h"
-
-int proc_fd_table[PROCESS_MAX_COUNT][FS_MAX_FILE_COUNT]; // 进程打开文件表空为 -1
 
 EXTERN_SYMBOL(trampoline); // 蹦床代码，用于页表映射
 EXTERN_SYMBOL(_binary_user_bin_start);
@@ -119,7 +117,7 @@ void process_init(){
         process_list[i].kstack_bottom = KERNEL_STACK(i); // 该地址已经被内核代码映射完毕
         process_list[i].pid = i;
         process_list[i].is_killed = false;
-        memset(&proc_fd_table[i], -1, sizeof(int) * FS_MAX_FILE_COUNT);
+        memset(&process_list[i].file_table, 0, PROCESS_MAX_FD_COUNT * sizeof(File *));
     }
     create_idle_process();
 }
@@ -324,14 +322,8 @@ void free_user_process(Process* p){
     p->pid = pid;
     
     for (int i = 0; i < FS_MAX_FILE_COUNT; i ++){
-        int *fd = &proc_fd_table[p->pid][i];
-        if (*fd < 0) continue;
-
-        File* file = get_file_from_fd(*fd); 
-        ASSERT(file); // TEST : 正常情况一定有这个文件
-
+        File* file = p->file_table[i];
         unref_file(file);
-        *fd = -1;
     }
 
     critical_exit();
@@ -455,13 +447,8 @@ i64 kfork(const char * name){
     }
 
     // TODO : fork 时文件表复制指针并 f_ref ++，父子共享 offset
-    
     for (int i = 0; i < FS_MAX_FILE_COUNT; i ++){
-        int fa_fd = proc_fd_table[fa->pid][i];
-        File * file = get_file_from_fd(fa_fd);
-
-        if (!file) continue;
-        proc_fd_table[p->pid][i] = proc_fd_table[fa->pid][i];
+ 
     }
 
     *(p->trap_frame_page) = *(fa->trap_frame_page);
@@ -500,32 +487,37 @@ u64 kwait(u64 exit_number){
 
     sleep_prepare(current_process);
 
-    while (1){
+    while (1) {
         bool haschild = false;
-        for (int i = 1; i < PROCESS_MAX_COUNT; i ++){
-            if (process_list[i].father != current_process) continue;
+        for (int i = 1; i < PROCESS_MAX_COUNT; i++) {
+            critical_enter();
+            bool is_child  = (process_list[i].father == current_process);
+            bool is_zombie = is_child && (process_list[i].state == PROC_ZOMBIE);
+            critical_exit();
+
+            if (!is_child) continue;
             haschild = true;
 
-            // 找 zombie
-            if (process_list[i].state == PROC_ZOMBIE){
-                if (exit_number){
-                    if (copy_to_user(current_process->page_table, exit_number,  
-                        (void *)(&process_list[i].exit_number), copy_size) != copy_size) 
-                    {
-                        // 复制失败
-                        return -1;
-                    };
+            if (is_zombie) {
+                if (exit_number &&
+                    copy_to_user(current_process->page_table, 
+                    exit_number,
+                    (void *)&process_list[i].exit_number, 
+                    copy_size
+                ) != copy_size) {
+                    current_process->chan = NULL;
+                    return -1;
                 }
+
                 free_user_process(&process_list[i]);
+                current_process->chan = NULL;
                 return i;
             }
         }
 
-        // 没有孩子或者已经死了
-        if (!haschild || current_process->is_killed){
+        if (!haschild || current_process->is_killed) {
             return -1;
         }
-
         sleep();
     }
 }
@@ -549,7 +541,6 @@ void abandon_child(Process *p){
 
 /* 退出进程 为父进程设置 exit_number */
 void kexit(i64 exit_number){
-    // TODO : close file fd 或者别的什么东西
     if (!current_process->father) PANIC("process do not have a father; maybe fisrt_process is ending;");
 
     abandon_child(current_process);
@@ -627,10 +618,21 @@ failed:
     return;
 }
 
-File* proc_get_file(Process* proc, u64 fd){
-    return get_file_from_fd(proc_fd_table[proc->pid][fd]);
+i64 kread(i64 fd, void *buf, size_t len){
+    if (fd < 0) return -1;
+    File* file = current_process->file_table[fd];
+    i64 res = file_read(file, buf, len);
+    return res;
 }
 
-i64 kread(){
+i64 kwrite(i64 fd, void *buf, size_t len){
+    if (fd < 0) return -1;
+    File* file = current_process->file_table[fd];
+    i64 res = file_write(file, buf, len);
+    return res;
+}
+
+i64 kopen(const char * filepath, u32 flags){
+    return open_file(sv_lit(filepath), flags, test_file_op, );
 }
 

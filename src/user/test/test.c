@@ -67,8 +67,6 @@ void test_run_all(void) {
     test_write_suite(&t);
     test_proc_suite(&t);
     println("OK");
-    // test_write_suite(&t);
-    // test_proc_suite(&t);
 
     test_summary(&t);
 }

@@ -113,7 +113,10 @@ u64 sys_read(void){
     return 0; 
 }
 
-u64 sys_open(void){ 
+u64 sys_open(void){
+    // int open(const char *path, int flags, ...
+    u64 address = get_arg(0);
+
     return 0; 
 }
 

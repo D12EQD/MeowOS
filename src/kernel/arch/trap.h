@@ -6,6 +6,7 @@
 u64 user_trap_handler();
 void kernel_trap_handler();
 void trap_init();
+void fork_ret(void);
 
 // enable device interrupts and return the old value
 static inline u64 interrupt_on() {

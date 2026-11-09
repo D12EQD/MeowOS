@@ -10,8 +10,7 @@
 
 #define PROCESS_MAX_COUNT           16        // 最大进程数量
 #define PROCESS_STACK_PAGE_COUNT    4
-#define PROCESS_MAX_FILE_COUNT      16   // 单个进程最大打开文件数量
-
+#define PROCESS_MAX_FD_COUNT        16   // 单个进程最大打开文件数量
 #define PROCESS_STACK_PAGE_END      (KERNEL_STACK(PROCESS_MAX_COUNT) - 3 * PAGE_SIZE)
 #define PROCESS_STACK_PAGE_START    (PROCESS_STACK_PAGE_END - PAGE_SIZE * PROCESS_STACK_PAGE_COUNT)
 
@@ -102,31 +101,35 @@ typedef struct __Process{
     u64 exit_number;            // 退出码返回值
     bool is_killed;             // 被杀了
 
-    File file_table[PROCESS_MAX_FILE_COUNT]; /* file table */
+    File* file_table[PROCESS_MAX_FD_COUNT]; /* file table */
 }Process;
 
 extern Process *current_process;
-
-void process_init();
-
-Process *create_kernel_process(u64 pc);
-Process *create_user_process();
-pt_t create_user_process_page(Process *p);
-
 [[noreturn]] void scheduler(void);
 
 void process_debug(Process *p);
 void trap_frame_debug(TrapFrame *tf);
-Process * get_proc_from_pid(i64 pid);
+void create_idle_process();
+void process_init();
+pt_t create_user_process_page(Process *p);
 bool first_user_init(Process *proc);
-
-void yield();
-void schedule();
-void fork_ret();
+Process *create_user_process();
+void free_user_process(Process *p);
+Process *find_ready_process();
+void yield(void);
 i64 kfork(const char *name);
-void kkill(i64 pid);
-void wakeup(void * p);
-void kexit(i64 exit_number);
+Process *get_proc_from_pid(i64 pid);
+void sleep_prepare(void *chan);
+void sleep();
 u64 kwait(u64 exit_number);
+void kkill(i64 pid);
+void abandon_child(Process *p);
+
+void wakeup(void *chan);
+
+void kexit(i64 exit_number);
 u64 kpalloc(u64 page_count);
 void kpfree(u64 page_count);
+
+i64 kread(i64 fd, void *address, size_t len);
+i64 kwrite(i64 fd, void *address, size_t len);

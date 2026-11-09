@@ -65,7 +65,7 @@ void kernel_main(){
     // test_copy_page();
     Process* p = create_user_process();
 
-    PANIC("DirEntry size = %ld", sizeof(DirEntry));
+    // PANIC("DirEntry size = %ld", sizeof(DirEntry));
 
     first_user_init(p);
     scheduler();
