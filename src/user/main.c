@@ -6,9 +6,11 @@
 int val[10];
 
 int user_main(){
+    println("hello world");
+
     test_run_all();
- 
     println("tests done, halting");
+ 
     while (1){
         _ASM("nop");
     }

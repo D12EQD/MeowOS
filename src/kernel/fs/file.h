@@ -74,7 +74,6 @@ i64 dir_readdir(File *f,DirEntry *out);
 bool lookup_parent(StringView path,Inode **fa_inode,StringView *fa_name);
 Inode *lookup_inode(Inode *dir,StringView path);
 File *open_file(StringView name,u32 flags,FileOp *operation,u32 i_mode);
-File *get_file_from_fd(u64 fd);
 
 i64 file_read(File *f,char *buf,u64 n);
 i64 file_write(File *f,const char *buf,u64 n);

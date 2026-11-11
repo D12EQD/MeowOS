@@ -88,9 +88,9 @@ void spinlock_release(SpinLock *lk) {
     critical_exit();
 }
 
-bool spinlock_debug(SpinLock *lk){
-    pr_cont_debug("Lock : %c", lk->name);
-    pr_debug(" locknumber = %u", lk->locked);
+bool spinlock_display(SpinLock *lk){
+    pr_cont_info("Lock : %c", lk->name);
+    pr_info(" locknumber = %u", lk->locked);
     return false;
 }
 

@@ -3,14 +3,11 @@
 
 #include "kernel/proc/process.h"
 
+#include "kernel/fs/fs.h"
+
 #include "kernel/syscall/syscall.h"
 
 #include "kernel/mm/page.h"
-
-// TODO : 切换为文件形式的时候需要分配内核缓冲区 目前暂时硬编码测试是否可以正常读写操作
-#define WRITE_CHUNK_SIZE 256
-char buf[WRITE_CHUNK_SIZE];
-
 
 static u64 get_arg(int n) {
     Process *p = current_process;
@@ -30,30 +27,6 @@ static u64 get_arg(int n) {
     }
     PANIC("get_arg");
     return -1;
-}
-
-u64 sys_write(){
-    i64 fd = get_arg(0);
-    if (fd != 1) return -1; // 目前只支持 stdout，非法 fd 返回 -1 而不是 PANIC
-
-    u64 user_buf = get_arg(1);
-    u64 count = get_arg(2);
-    u64 done = 0;
-
-    // 一批一批写
-    while (done < count){
-        u64 n = count - done;
-        if (n > sizeof(buf)) n = sizeof (buf);
-
-        if (copy_from_user(current_process->page_table, buf, (void *)(user_buf + done), n) != (i64)n){
-            return done ? done : (u64)-1;
-        }
-
-        puts_n(buf, n);
-        done += n;
-    }
-
-    return count;
 }
 
 u64 sys_fork(){
@@ -99,7 +72,6 @@ u64 sys_wait(void) {
 u64 sys_palloc(void){
     u64 page_count = get_arg(0);
     u64 res = kpalloc(page_count);
-    pr_debug("sys_palloc return");
     return res;
 }
 
@@ -109,16 +81,27 @@ u64 sys_pfree(void){
     return true;
 }
 
+u64 sys_write(){
+    i64 fd = (i64) get_arg(0);
+    void *buf = (void *)get_arg(1);
+    u64 len = get_arg(2);
+    return kwrite(fd, buf, len);
+}
+
 u64 sys_read(void){ 
-    return 0; 
+    i64 fd = (i64) get_arg(0);
+    void *buf = (void *)get_arg(1);
+    u64 len = get_arg(2);
+    return kread(fd, buf, len);
 }
 
 u64 sys_open(void){
-    // int open(const char *path, int flags, ...
-    u64 address = get_arg(0);
-
-    return 0; 
+    const char *name = (const char *)get_arg(0);
+    u32 flag = (u32)get_arg(1);
+    i64 res = kopen(name, flag);
+    return res;
 }
+
 
 u64 sys_close(void){ 
     return 0; 

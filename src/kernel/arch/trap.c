@@ -56,13 +56,11 @@ void kernel_trap_handler(){
  * 用户程序异常处理程序
  */ 
 u64 user_trap_handler() {
-    // pr_debug("user_trap_handler start");
     u64 scause = READ_CSR(CSR_SCAUSE);
     u64 sstatus = READ_CSR(CSR_SSTATUS);
     u64 user_pc = READ_CSR(CSR_SEPC);
     u64 stval = READ_CSR(CSR_STVAL);
 
-    // pr_debug("user trap for cause = %lx, pc = %lx, status = %lx, stval = %lx", scause, user_pc, sstatus, stval);
     // from kernel
     if ((sstatus & SSTATUS_SPP) == 1){ 
         PANIC("user_trap_handler : not from supervisor mode");
@@ -81,7 +79,6 @@ u64 user_trap_handler() {
             break;
         case 8: // syscall
             // 开启中断，陷入内核态时会自动关中断
-            // pr_debug("syscall");
             current_process->trap_frame_page->epc += 4;
             interrupt_on(); 
             syscall();
@@ -98,7 +95,6 @@ u64 user_trap_handler() {
     }
     
     if (current_process->is_killed){
-        pr_debug("kill the procress");
         kexit(-1);
     }
     

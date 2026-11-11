@@ -1,6 +1,7 @@
 #include "file.h"
 #include "fs.h"
 #include "path.h"
+#include "kernel/fs/io.h"
 
 #include "kernel/proc/process.h"
 #include "kernel/mm/def.h"
@@ -15,27 +16,28 @@ FileOp dir_fop = {
     .write = NULL
 };
 
-i64 fs_test_read (File *f, char *buf, size_t n){
+i64 fs_test_read (File *, char *, size_t n){
     pr_debug("read");
     return n;
 }
 
-i64 fs_test_write (File *f, const char *buf, size_t n){
+i64 fs_test_write (File *, const char *, size_t n){
     pr_debug("write");
     return n;
 }
 
-i64 fs_test_lseek (File *f, i64 offset, int whence){
+i64 fs_test_lseek (File *, i64 , int ){
     pr_debug("lseek");
     return 0;
 }
 
-i64 fs_test_readdir (File *f, DirEntry *out){
-    out = NULL;
+i64 fs_test_readdir (File *, DirEntry *){
+    pr_debug("readdir");
     return 0;
 }
 
-int fs_test_release (File *f){
+int fs_test_release (File *){
+    pr_debug("release");
     return 0;
 }
 
@@ -79,7 +81,7 @@ void fs_dfs(Inode *dir, const char *prefix, int depth) {
         pr_cont_debug("%s%s", prefix, is_last ? "└── " : "├── ");
 
         if (d[i].inode->mode == INODE_DIR) {
-            pr_debug("%s/", d[i].name);
+            pr_info("%s/", d[i].name);
 
             char child[16 * 8];
             u64 plen = 0;
@@ -92,17 +94,25 @@ void fs_dfs(Inode *dir, const char *prefix, int depth) {
 
             fs_dfs(d[i].inode, child, depth + 1);
         } else {
-            pr_debug("%s", d[i].name);
+            pr_info("%s", d[i].name);
         }
     }
 }
 
 void fs_init(){
+    memset(inode_table, 0, sizeof(Inode) * FS_MAX_INODE_COUNT);
+    memset(file_table, 0, sizeof(File) * FS_MAX_FILE_COUNT);
+
     for (u64 i = 0; i < FS_MAX_INODE_COUNT; i ++){
         inode_table[i].ino = i;
     }
+
     root_inode = create_inode(PAGE_SIZE, INODE_DIR);
     root_file = create_file(&dir_fop, root_inode, 0, O_RW);
+
+    if (fs_mkdir(sv_lit(IO_DIR)) == false){
+        PANIC("create io dir = /dev failed\n");
+    }
 }
 
 
@@ -224,4 +234,61 @@ File *dup_file(File *f){
     ref_file(f);
     critical_exit();
     return f;
+}
+
+
+/* 
+ * 内核的文件系统实现的系统调用接口
+ * 注，内核的kwrite kread kopen 所有指针都来自用户，需要转换和判断
+ */
+i64 kwrite(i64 fd, void *buf, size_t len){
+    if (fd < 0) return -1;
+    if (fd >= PROCESS_MAX_FD_COUNT) return -1;
+
+    File* file = current_process->file_table[fd];
+
+    if (!file) return -1;
+
+    i64 res = file_write(file, buf, len);
+    return res;
+}
+
+i64 kread(i64 fd, void *buf, size_t len){
+    if (fd < 0) return -1;
+    if (fd >= PROCESS_MAX_FD_COUNT) return -1;
+
+    File* file = current_process->file_table[fd];
+    if (!file) return -1;
+
+    i64 res = file_read(file, buf, len);
+    return res;
+}
+
+i64 kopen(const char * input_path, u32 flags){
+    // TODO: 正式版需要替换为常规文件
+    critical_enter();
+    
+    char file_path[FILE_NAME_MAX]; 
+    copy_str_from_user(current_process->page_table, (void *)file_path, (void *)input_path, FILE_NAME_MAX);
+    int fd = -1;
+
+    // 找一个 fd 空槽存放
+    for (u64 i = 0; i < PROCESS_MAX_FD_COUNT; i ++){
+        if (current_process->file_table[i] == NULL){
+            fd = i;
+            break;
+        }
+    }
+
+    if (fd == -1) goto failed;
+    File* file = open_file(sv_from_cstr(file_path), flags, &test_fop, INODE_REG);
+
+    if (!file) goto failed;
+    current_process->file_table[fd] = file;
+
+    critical_exit();
+    return fd;
+failed:
+    critical_exit();
+    return -1;
 }

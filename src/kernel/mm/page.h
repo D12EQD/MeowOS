@@ -88,7 +88,8 @@ void kernel_page_open();
 u64 vaddr_to_paddr(pt_t page_table, u64 vaddr);
 
 i64 copy_from_user(pt_t page_table, void *dst, void* src_user, u64 len);
-i64 copy_to_user(pt_t page_table, u64 dst_user, char *src, u64 len);
+i64 copy_to_user(pt_t page_table, void* dst_user, void *src, u64 len);
+i64 copy_str_from_user(pt_t page_table, char *dst, void *src_user, u64 max);
 
 bool copy_page_table(pt_t old, pt_t new, u64 start, u64 page_count);
 

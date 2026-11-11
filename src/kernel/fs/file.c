@@ -2,6 +2,7 @@
 #include "kernel/lib/string.h"
 #include "kernel/mm/pmm.h"
 #include "kernel/fs/file.h"
+#include "kernel/fs/fs.h" // TEST: 
 
 #include "kernel/proc/lock.h"
 #include "kernel/proc/process.h"
@@ -82,6 +83,8 @@ Inode* create_inode(u64 need_size, u32 mode){
     // 2. init
     in->vaddr = kalloc_page(); // 固定为 1 page
     if(!in->vaddr) goto failed;
+    // 默认清空 固定为 1 page
+    memset(in->vaddr, 0, PAGE_SIZE);
     in->cap = PAGE_SIZE;
     in->size = 0;
     in->mode = mode;
@@ -96,7 +99,8 @@ failed:
 }
 
 /* 
- * 将 son文件 插入 fa目录 下，fname 是文件名 
+ * 将 son文件 插入 fa目录 下，fname 是文件名
+ * 目录文件满了返回 false
  * 对 file 进行一次引用
  */
 bool insert_dir_entry(Inode * fa, Inode* son, StringView fname){
@@ -105,7 +109,7 @@ bool insert_dir_entry(Inode * fa, Inode* son, StringView fname){
     if unlikely (!fname.data || fname.count == 0)   return false;
     if unlikely (fname.count >= FILE_NAME_MAX)      return false;
     if unlikely (fa->size == fa->cap)               return false;
-    if unlikely (lookup_dir_entry(fa, fname))         return false;
+    if unlikely (lookup_dir_entry(fa, fname))       return false;
     if unlikely (!is_vaild_filename(fname))         return false;
 
     critical_enter();
@@ -345,7 +349,7 @@ File* open_file(StringView name, u32 flags, FileOp* operation, u32 i_mode){
     if (!path_get_filename(name, &filename)) return NULL;
 
     dir_inode = lookup_inode(root_inode, dir_path);
-    inode     = lookup_inode(root_inode, name);
+    inode = lookup_inode(root_inode, name);
 
     if (!dir_inode) return NULL;
 
@@ -358,18 +362,15 @@ File* open_file(StringView name, u32 flags, FileOp* operation, u32 i_mode){
         if (!(flags & O_CREATE)) goto failed;
         flags &= ~O_CREATE;
 
-        /* 满目录检查只拦创建，不拦打开已存在的 */
-        if (dir_inode->size == dir_inode->cap) goto failed;
-
         /* ref = 0 */
         inode = create_inode(PAGE_SIZE, i_mode);
         if (!inode) goto failed;
 
-        ref_inode(inode); /* 创建者持有，ref = 1 */
+        ref_inode(inode); /* ref = 1 */
         if (!insert_dir_entry(dir_inode, inode, filename)){
             goto unref_file_inode; /* ref = 1 -> 0 */
         }
-        unref_inode(inode); /* 释放创建者，ref = 1（只剩目录项） */
+        unref_inode(inode); /* ref = 1 目录项持有 */
     }else{
         if (inode->mode != i_mode) goto failed;
     }
@@ -387,15 +388,6 @@ failed:
     critical_exit();
     return NULL;
 }
-
-
-File * get_file_from_fd(u64 fd){
-    // TEST :
-    ASSERT(fd < FS_MAX_FILE_COUNT);
-    if unlikely (file_table[fd].inode == NULL) return NULL;
-    return &file_table[fd];
-}
-
 
 i64 file_read(File *f, char *buf, u64 n){
     if (!f) return -1;
@@ -418,7 +410,7 @@ i64 file_read(File *f, char *buf, u64 n){
 i64 file_write(File *f, const char *buf, u64 n){
     if (!f) return -1;
     if (!f->inode) return -1;
-    if (!(f->flags & O_READ)) return -1;
+    if (!(f->flags & O_WRITE)) return -1;
     if (!n) return 0;
 
     i64 cost = 0;

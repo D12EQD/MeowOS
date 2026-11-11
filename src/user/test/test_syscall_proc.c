@@ -9,12 +9,7 @@ static u32 count_of(const u64 *arr, u32 n, u64 v) {
     return c;
 }
 
-/*
- * fork / wait / exit / getpid 的回归测试
- *
- * PROCESS_MAX_COUNT = 16：0 号 idle、1 号根进程，还剩 14 个用户槽位。
- * 所以这里可以做多子进程、嵌套 fork、进程树、槽位耗尽这些场景。
- */
+/* fork / wait / exit / getpid 的回归测试 */
 void test_proc_suite(TestCtx *t) {
     u64 pid;
     u64 got;
@@ -22,29 +17,32 @@ void test_proc_suite(TestCtx *t) {
 
     /* ---------------- 基本语义 ---------------- */
     test_case(t, "fork/getpid: 父返回子 pid、子返回 0");
-    test_expect(t, "根进程 getpid() == 1", (i64)sys_getpid_raw(), 1);
+    test_expect(t, "根进程 getpid() == 1", (i64)getpid(), 1);
 
     pid = fork();
-    if (pid == 0) {                 /* 子进程：能看到 0 才算对 */
-        sys_exit_raw(0);
+    if (pid == 0) {
+        exit(69);
     }
+
     test_expect(t, "fork() 在父进程中返回合法 pid", (i64)(pid > 1), 1);
     st = -1;
-    got = wait(&st);
-    test_expect(t, "wait() 返回的 pid 等于 fork() 的返回值", (i64)got, (i64)pid);
-    test_expect(t, "子进程里 fork() 返回 0（用退出码 0 回传）", st, 0);
 
-    /* ---------------- 子进程 pid 一致性 ---------------- */
+    // BUG :
+    got = wait(&st);
+
+    test_expect(t, "wait() 返回的 pid 等于 fork() 的返回值", (i64)got, (i64)pid);
+    test_expect(t, "子进程里 fork() 返回 69", st, 69);
+
+    /* 子进程 pid 一致性 */
     test_case(t, "getpid: 子进程自己的 pid 与 fork 返回值一致");
     pid = fork();
     if (pid == 0) {
-        sys_exit_raw((i64)sys_getpid_raw());   /* 用退出码把 getpid() 带回去 */
+        exit((i64)getpid());   /* 用退出码把 getpid() 带回去 */
     }
     st = 0;
     got = wait(&st);
     test_expect(t, "wait() 拿到的 pid == 子进程 getpid()", (i64)got, st);
 
-    /* ---------------- 多个兄弟进程 ---------------- */
     test_case(t, "fork: 三个兄弟进程，pid 与退出码一一对应");
     {
         u64 pids[3];
@@ -56,7 +54,7 @@ void test_proc_suite(TestCtx *t) {
             pids[i] = fork();
             /* 退出码 = 自己的 pid，父进程据此判断配对是否正确 */
             if (pids[i] == 0) {
-                sys_exit_raw((i64)sys_getpid_raw());
+                exit((i64)getpid());
             }
         }
 
@@ -84,14 +82,14 @@ void test_proc_suite(TestCtx *t) {
     /* ---------------- 退出码透传 ---------------- */
     test_case(t, "wait: 退出码透传");
     pid = fork();
-    if (pid == 0) sys_exit_raw(42);
+    if (pid == 0) exit(42);
     st = 0;
     got = wait(&st);
     test_expect(t, "退出码 42 被正确回传", st, 42);
 
     test_case(t, "wait: 64 位退出码不被截断");
     pid = fork();
-    if (pid == 0) sys_exit_raw(0xdeadbeef);
+    if (pid == 0) exit(0xdeadbeef);
     st = 0;
     got = wait(&st);
     test_expect(t, "退出码 0xdeadbeef 完整回传", st, 0xdeadbeef);
@@ -99,7 +97,7 @@ void test_proc_suite(TestCtx *t) {
     /* ---------------- wait(NULL) ---------------- */
     test_case(t, "wait: 传入 NULL 时不写用户内存，仍返回 pid");
     pid = fork();
-    if (pid == 0) sys_exit_raw(7);
+    if (pid == 0) exit(7);
     got = wait(NULL);
     test_expect(t, "wait(NULL) 返回子进程 pid", (i64)got, (i64)pid);
 
@@ -111,9 +109,9 @@ void test_proc_suite(TestCtx *t) {
         pid = fork();
         if (pid == 0) {
             /* 子进程应该看到 fork 前的数据，改动不能影响父进程 */
-            if (mark != 0x1111) sys_exit_raw(1);
+            if (mark != 0x1111) exit(1);
             mark = 0x2222;
-            sys_exit_raw(0);
+            exit(0);
         }
 
         st = -1;
@@ -127,13 +125,13 @@ void test_proc_suite(TestCtx *t) {
     pid = fork();
     if (pid == 0) {
         u64 g = fork();
-        if (g == 0) sys_exit_raw(7);
+        if (g == 0) exit(7);
 
         i64 gst = 0;
         u64 gt = wait(&gst);
-        if ((i64)gt == -1) sys_exit_raw(1);   /* 拿不到孙子 */
-        if (gst != 7) sys_exit_raw(2);        /* 退出码不对 */
-        sys_exit_raw((i64)sys_getpid_raw());  /* 孩子把自己的 pid 作为退出码 */
+        if ((i64)gt == -1) exit(1);   /* 拿不到孙子 */
+        if (gst != 7) exit(2);        /* 退出码不对 */
+        exit((i64)getpid());  /* 孩子把自己的 pid 作为退出码 */
     }
     st = 0;
     got = wait(&st);
@@ -148,8 +146,8 @@ void test_proc_suite(TestCtx *t) {
     pid = fork();
     if (pid == 0) {
         u64 b = fork();
-        if (b == 0) sys_exit_raw(99);
-        sys_exit_raw(5);              /* A 不回收 B，直接退出 */
+        if (b == 0) exit(99);
+        exit(5);              /* A 不回收 B，直接退出 */
     }
     st = 0;
     wait(&st);
@@ -162,7 +160,7 @@ void test_proc_suite(TestCtx *t) {
     /* ---------------- 非法 wait 地址 ---------------- */
     test_case(t, "wait: 非法用户地址不回收子进程，可以重试");
     pid = fork();
-    if (pid == 0) sys_exit_raw(9);
+    if (pid == 0) exit(9);
     got = wait((void *)0xdead0000UL);
     test_expect(t, "wait(非法地址) 返回 -1", (i64)got, -1);
 
@@ -181,7 +179,7 @@ void test_proc_suite(TestCtx *t) {
         while (n < 16) {
             p = fork();
             if ((i64)p == -1) break;
-            if (p == 0) sys_exit_raw(0);
+            if (p == 0) exit(0);
             kids[n ++] = p;
         }
 
@@ -193,7 +191,7 @@ void test_proc_suite(TestCtx *t) {
         }
 
         p = fork();
-        if (p == 0) sys_exit_raw(0);
+        if (p == 0) exit(0);
         test_expect(t, "全部回收后 fork() 恢复正常", (i64)(p > 1), 1);
         wait(NULL);
     }
@@ -210,9 +208,9 @@ void test_proc_suite(TestCtx *t) {
         u64 r = wait(NULL);
         if (r == (u64)-1) {
             println("child: wait() 没有子进程 -> -1");
-            sys_exit_raw(55);         /* 期望能走到这里 */
+            exit(55);         /* 期望能走到这里 */
         }
-        sys_exit_raw(56);
+        exit(56);
     }
     st = 0;
     got = wait(&st);

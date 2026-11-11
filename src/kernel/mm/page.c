@@ -22,13 +22,6 @@ EXTERN_SYMBOL(__free_ram_end);
 
 pt_t kernel_page_table; /* 内核页目录 */
 
-// static inline void print_pte(pte_t pte){
-//     pr_debug("%lx %b", PTE_TO_PADDR(pte), (pte & 0b1111111111));
-// }
-//
-// static inline void print_vaddr(u64 vaddr){
-//     pr_debug("%lx %lx %lx %lx", GET_VA_VPN2(vaddr), GET_VA_VPN1(vaddr), GET_VA_VPN0(vaddr), GET_VA_OFFSET(vaddr));
-// }
 
 static inline void flush_TLB(){
     _ASM("sfence.vma zero, zero" ::: "memory");
@@ -303,7 +296,6 @@ bool copy_page_table(pt_t old, pt_t new, u64 start, u64 page_count){
     u64 i;
     u64 new_page;
     
-    // pr_debug("copy_page_table old=%lx new=%lx start=%lx page_count=%ld", old, new, start, page_count);
     for (i = 0; i < page_count * PAGE_SIZE; i += PAGE_SIZE) {
         u64 va = start + i;
 
@@ -313,7 +305,6 @@ bool copy_page_table(pt_t old, pt_t new, u64 start, u64 page_count){
         }
         if ((*pte & PTE_V) == 0) continue;
         
-        // pr_debug("copy_page_table debug : %ld alloc", va);
         // 1. 分配 page
         new_page = (u64)kalloc_page();
         if (!new_page) goto err;
@@ -335,18 +326,18 @@ bool copy_page_table(pt_t old, pt_t new, u64 start, u64 page_count){
 free_page_err:
     kfree((void *)new_page);
 err:
-    pr_debug("copy_page_table error");
     user_unmap_pages(new, start, i / PAGE_SIZE, true);
     return false;
 }
 
 /* 
- * 从用户地址拷到内核
+ * 从用户地址拷到内核，内部会检测是否是合法的用户的地址
  *  returns:
  *      >= 0 拷贝的数据大小
  *      -1 用户指针不正确
  */
 i64 copy_from_user(pt_t page_table, void *dst, void *src_user, u64 len){
+    if (page_table == kernel_page_table) PANIC("page table error. Why it is kernel page table?");
     u64 src = (u64)src_user;
     u64 dst_addr = (u64)dst;
     u64 remain = len;
@@ -367,8 +358,16 @@ i64 copy_from_user(pt_t page_table, void *dst, void *src_user, u64 len){
     return (i64)len;
 }
 
-i64 copy_to_user(pt_t page_table, u64 dst_user, char *src, u64 len){
-    u64 dst = dst_user;
+/*
+ *  拷贝数据给用户，内部会检测是否是合法的用户的地址
+ *  returns:
+ *      >= 0 拷贝的数据大小
+ *      < 0 failed
+ */
+i64 copy_to_user(pt_t page_table, void* dst_user, void *src, u64 len){
+    if (page_table == kernel_page_table) PANIC("page table error. Why it is kernel page table?");
+
+    u64 dst = (u64)dst_user;
     u64 src_addr = (u64)src;
     u64 remain = len;
 
@@ -388,4 +387,39 @@ i64 copy_to_user(pt_t page_table, u64 dst_user, char *src, u64 len){
     return (i64)len;
 }
 
+/*
+ *  从用户地址拷一个以 '\0' 结尾的字符串到内核缓冲
+ *  max 是 dst 的容量，包含结尾 '\0'
+ *  returns:
+ *      >= 0 拷贝的字节数（不含结尾 '\0'）
+ *      -1 用户指针不正确，或字符串在 max 内没结束
+ */
+i64 copy_str_from_user(pt_t page_table, char *dst, void *src_user, u64 max){
+    if (page_table == kernel_page_table) PANIC("page table error. Why it is kernel page table?");
+    if (max == 0) return -1;
+
+    u64 src = (u64)src_user;
+    u64 copied = 0;
+
+    while (copied < max){
+        u64 pa = vaddr_to_paddr(page_table, src);
+        if unlikely(pa == 0) return -1;
+
+        // pa 是 src 对应的物理地址，算出本页还能读多少
+        u64 chunk = PAGE_SIZE - (src & (PAGE_SIZE - 1));
+        // 不能写穿 dst，给结尾 '\0' 留位置
+        if (chunk > max - copied) chunk = max - copied;
+
+        const u8 *p = (const u8 *)pa;
+        for (u64 i = 0; i < chunk; i++){
+            dst[copied + i] = (char)p[i];
+            if (p[i] == '\0') return (i64)(copied + i);
+        }
+
+        copied += chunk;
+        src += chunk;
+    }
+
+    return -1;
+}
 

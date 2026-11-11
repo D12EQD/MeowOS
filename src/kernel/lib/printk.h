@@ -2,6 +2,7 @@
 #include "kernel/arch/trap.h"
 #include "kernel/arch/def.h"
 #include "kernel/lib/def.h"
+#include "kernel/arch/console.h"
 
 #define __printf(a, b) __attribute__((format(printf, a, b)))
 
@@ -30,8 +31,6 @@ int __printf(2, 3) sprintf(char *buf, const char *fmt, ...);
 int __printf(2, 3) printk(KernelPrintLevel level, const char *fmt, ...);
 
 void set_print_filter(u64 new_level);
-void puts(char *s);
-void puts_n(char *s, u64 count);
 
 #define PANIC(fmt, ...) do {                                        \
     interrupt_off();                                                \

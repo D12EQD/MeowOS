@@ -14,6 +14,11 @@
 #define PROCESS_STACK_PAGE_END      (KERNEL_STACK(PROCESS_MAX_COUNT) - 3 * PAGE_SIZE)
 #define PROCESS_STACK_PAGE_START    (PROCESS_STACK_PAGE_END - PAGE_SIZE * PROCESS_STACK_PAGE_COUNT)
 
+// 固定两个文件描述符
+#define STDIN   0
+#define STDOUT  1
+
+
 enum proc_state{
     PROC_UNUSED,    // 未使用的进程控制结构
     PROC_READY,     // 可运行的进程
@@ -107,8 +112,8 @@ typedef struct __Process{
 extern Process *current_process;
 [[noreturn]] void scheduler(void);
 
-void process_debug(Process *p);
-void trap_frame_debug(TrapFrame *tf);
+void process_display(Process *p);
+void trap_frame_display(TrapFrame *tf);
 void create_idle_process();
 void process_init();
 pt_t create_user_process_page(Process *p);
@@ -130,6 +135,3 @@ void wakeup(void *chan);
 void kexit(i64 exit_number);
 u64 kpalloc(u64 page_count);
 void kpfree(u64 page_count);
-
-i64 kread(i64 fd, void *address, size_t len);
-i64 kwrite(i64 fd, void *address, size_t len);

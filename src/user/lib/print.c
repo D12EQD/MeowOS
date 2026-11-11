@@ -136,8 +136,8 @@ int printf_imple(const char *fmt, ...) {
     int n = vfmt(buf, sizeof buf, fmt, ap);
     va_end(ap);
 
-    /* 一次 ecall 写出整段，避免逐字符 syscall */
     u64 wr = (n < (int)sizeof buf) ? (u64)n : (u64)(sizeof buf - 1);
     write(1, buf, wr);
     return n;
 }
+

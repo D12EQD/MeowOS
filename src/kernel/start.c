@@ -16,6 +16,9 @@
 #include "kernel/mm/pmm.h"
 
 #include "kernel/fs/file.h"
+#include "kernel/fs/fs.h"
+
+#include "kernel/arch/sbi.h"
 
 EXTERN_SYMBOL( __end_text_section);
 EXTERN_SYMBOL( __trampoline_section_start);
@@ -43,8 +46,9 @@ void kernel_init(u64 fdt_address){
     kmm_init();
     kernel_page_init();
     kernel_page_open();
-
+    fs_init();
     process_init();
+
     timer_init(&boot_info);
 }
 
@@ -61,12 +65,7 @@ void kernel_start(){
 }
 
 void kernel_main(){
-    // set_print_filter(K_DEBUG);
-    // test_copy_page();
     Process* p = create_user_process();
-
-    // PANIC("DirEntry size = %ld", sizeof(DirEntry));
-
     first_user_init(p);
     scheduler();
 }

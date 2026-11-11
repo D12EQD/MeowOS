@@ -1,7 +1,7 @@
 #include "kernel/proc/process.h"
 #include "kernel/proc/lock.h"
+
 #include "kernel/arch/trap.h"
-#include "kernel/lib/error.h"
 
 #include "kernel/arch/def.h"
 #include "kernel/arch/trap.h"
@@ -13,6 +13,10 @@
 #include "kernel/mm/def.h"
 #include "kernel/mm/page.h"
 #include "kernel/mm/pmm.h"
+
+#include "kernel/fs/io.h"
+#include "kernel/fs/fs.h"
+#include "kernel/fs/file.h"
 
 EXTERN_SYMBOL(trampoline); // 蹦床代码，用于页表映射
 EXTERN_SYMBOL(_binary_user_bin_start);
@@ -42,66 +46,66 @@ static inline void process_free_page_table(Process* p){
     critical_exit();
 }
 
-void process_debug(Process *p){
-    pr_debug("[");
-    if (p->name) pr_debug("  process name : %s", p->name);
-    pr_debug("  process_debug : pid = %d", p->pid);
-    pr_debug("  context infomation : ra = %lx, sp = %lx", 
+void process_display(Process *p){
+    pr_info("[");
+    if (p->name) pr_info("  process name : %s", p->name);
+    pr_info("  process_info : pid = %d", p->pid);
+    pr_info("  context infomation : ra = %lx, sp = %lx", 
         p->context.ra, p->context.sp);
-    pr_debug("  page_table = %lx, frame_page = %lx", 
+    pr_info("  page_table = %lx, frame_page = %lx", 
         (u64)p->page_table, (u64)p->trap_frame_page
     );
-    pr_debug("]\n");
+    pr_info("]\n");
 }
 
-void trap_frame_debug(TrapFrame *tf){
+void trap_frame_display(TrapFrame *tf){
      if (!tf) {
-        pr_cont_debug("TrapFrame: NULL\n");
+        pr_cont_info("TrapFrame: NULL\n");
         return;
     }
 
-    pr_cont_debug("TrapFrame @ 0x%lx {\n", (u64)tf);
-    pr_cont_debug("  [  0] kernel_satp        = 0x%lx\n", tf->kernel_satp);
-    pr_cont_debug("  [  8] kernel_sp          = 0x%lx\n", tf->kernel_sp);
-    pr_cont_debug("  [ 16] user_trap_function = 0x%lx\n", tf->user_trap_function);
-    pr_cont_debug("  [ 24] epc                = 0x%lx\n", tf->epc);
-    pr_cont_debug("  [ 32] kernel_hartid      = 0x%lx\n", tf->kernel_hartid);
+    pr_cont_info("TrapFrame @ 0x%lx {\n", (u64)tf);
+    pr_cont_info("  [  0] kernel_satp        = 0x%lx\n", tf->kernel_satp);
+    pr_cont_info("  [  8] kernel_sp          = 0x%lx\n", tf->kernel_sp);
+    pr_cont_info("  [ 16] user_trap_function = 0x%lx\n", tf->user_trap_function);
+    pr_cont_info("  [ 24] epc                = 0x%lx\n", tf->epc);
+    pr_cont_info("  [ 32] kernel_hartid      = 0x%lx\n", tf->kernel_hartid);
 
-    pr_cont_debug("  [ 40] ra                 = 0x%lx\n", tf->ra);
-    pr_cont_debug("  [ 48] sp                 = 0x%lx\n", tf->sp);
-    pr_cont_debug("  [ 56] gp                 = 0x%lx\n", tf->gp);
-    pr_cont_debug("  [ 64] tp                 = 0x%lx\n", tf->tp);
-    pr_cont_debug("  [ 72] t0                 = 0x%lx\n", tf->t0);
-    pr_cont_debug("  [ 80] t1                 = 0x%lx\n", tf->t1);
-    pr_cont_debug("  [ 88] t2                 = 0x%lx\n", tf->t2);
-    pr_cont_debug("  [ 96] s0                 = 0x%lx\n", tf->s0);
-    pr_cont_debug("  [104] s1                 = 0x%lx\n", tf->s1);
+    pr_cont_info("  [ 40] ra                 = 0x%lx\n", tf->ra);
+    pr_cont_info("  [ 48] sp                 = 0x%lx\n", tf->sp);
+    pr_cont_info("  [ 56] gp                 = 0x%lx\n", tf->gp);
+    pr_cont_info("  [ 64] tp                 = 0x%lx\n", tf->tp);
+    pr_cont_info("  [ 72] t0                 = 0x%lx\n", tf->t0);
+    pr_cont_info("  [ 80] t1                 = 0x%lx\n", tf->t1);
+    pr_cont_info("  [ 88] t2                 = 0x%lx\n", tf->t2);
+    pr_cont_info("  [ 96] s0                 = 0x%lx\n", tf->s0);
+    pr_cont_info("  [104] s1                 = 0x%lx\n", tf->s1);
 
-    pr_cont_debug("  [112] a0                 = 0x%lx\n", tf->a0);
-    pr_cont_debug("  [120] a1                 = 0x%lx\n", tf->a1);
-    pr_cont_debug("  [128] a2                 = 0x%lx\n", tf->a2);
-    pr_cont_debug("  [136] a3                 = 0x%lx\n", tf->a3);
-    pr_cont_debug("  [144] a4                 = 0x%lx\n", tf->a4);
-    pr_cont_debug("  [152] a5                 = 0x%lx\n", tf->a5);
-    pr_cont_debug("  [160] a6                 = 0x%lx\n", tf->a6);
-    pr_cont_debug("  [168] a7                 = 0x%lx\n", tf->a7);
+    pr_cont_info("  [112] a0                 = 0x%lx\n", tf->a0);
+    pr_cont_info("  [120] a1                 = 0x%lx\n", tf->a1);
+    pr_cont_info("  [128] a2                 = 0x%lx\n", tf->a2);
+    pr_cont_info("  [136] a3                 = 0x%lx\n", tf->a3);
+    pr_cont_info("  [144] a4                 = 0x%lx\n", tf->a4);
+    pr_cont_info("  [152] a5                 = 0x%lx\n", tf->a5);
+    pr_cont_info("  [160] a6                 = 0x%lx\n", tf->a6);
+    pr_cont_info("  [168] a7                 = 0x%lx\n", tf->a7);
 
-    pr_cont_debug("  [176] s2                 = 0x%lx\n", tf->s2);
-    pr_cont_debug("  [184] s3                 = 0x%lx\n", tf->s3);
-    pr_cont_debug("  [192] s4                 = 0x%lx\n", tf->s4);
-    pr_cont_debug("  [200] s5                 = 0x%lx\n", tf->s5);
-    pr_cont_debug("  [208] s6                 = 0x%lx\n", tf->s6);
-    pr_cont_debug("  [216] s7                 = 0x%lx\n", tf->s7);
-    pr_cont_debug("  [224] s8                 = 0x%lx\n", tf->s8);
-    pr_cont_debug("  [232] s9                 = 0x%lx\n", tf->s9);
-    pr_cont_debug("  [240] s10                = 0x%lx\n", tf->s10);
-    pr_cont_debug("  [248] s11                = 0x%lx\n", tf->s11);
+    pr_cont_info("  [176] s2                 = 0x%lx\n", tf->s2);
+    pr_cont_info("  [184] s3                 = 0x%lx\n", tf->s3);
+    pr_cont_info("  [192] s4                 = 0x%lx\n", tf->s4);
+    pr_cont_info("  [200] s5                 = 0x%lx\n", tf->s5);
+    pr_cont_info("  [208] s6                 = 0x%lx\n", tf->s6);
+    pr_cont_info("  [216] s7                 = 0x%lx\n", tf->s7);
+    pr_cont_info("  [224] s8                 = 0x%lx\n", tf->s8);
+    pr_cont_info("  [232] s9                 = 0x%lx\n", tf->s9);
+    pr_cont_info("  [240] s10                = 0x%lx\n", tf->s10);
+    pr_cont_info("  [248] s11                = 0x%lx\n", tf->s11);
 
-    pr_cont_debug("  [256] t3                 = 0x%lx\n", tf->t3);
-    pr_cont_debug("  [264] t4                 = 0x%lx\n", tf->t4);
-    pr_cont_debug("  [272] t5                 = 0x%lx\n", tf->t5);
-    pr_cont_debug("  [280] t6                 = 0x%lx\n", tf->t6);
-    pr_cont_debug("}\n");
+    pr_cont_info("  [256] t3                 = 0x%lx\n", tf->t3);
+    pr_cont_info("  [264] t4                 = 0x%lx\n", tf->t4);
+    pr_cont_info("  [272] t5                 = 0x%lx\n", tf->t5);
+    pr_cont_info("  [280] t6                 = 0x%lx\n", tf->t6);
+    pr_cont_info("}\n");
 }
 
 void create_idle_process(){
@@ -246,8 +250,17 @@ bool first_user_init(Process *proc){
         goto error;
     }
 
-    // 4. init file TODO : 
+    // 4. create stdin stdout
+    
+    proc->file_table[STDIN] = open_file(
+        sv_lit(IO_STDIN), O_CREATE | O_READ, &io_fop, INODE_IO
+    );
 
+    proc->file_table[STDOUT] = open_file(
+        sv_lit(IO_STDOUT), O_CREATE | O_WRITE, &io_fop, INODE_IO
+    );
+    ASSERT(proc->file_table[STDOUT] && proc->file_table[STDOUT]);
+ 
     ASSERT(vaddr_to_paddr(page_table, USER_GUARD_VADDR) == 0);
     ASSERT(UESR_HEAP_START == USER_GUARD_VADDR + PAGE_SIZE);
 
@@ -321,9 +334,12 @@ void free_user_process(Process* p){
     p->kstack_bottom = KERNEL_STACK(pid);
     p->pid = pid;
     
-    for (int i = 0; i < FS_MAX_FILE_COUNT; i ++){
+
+    for (int i = 0; i < PROCESS_MAX_FD_COUNT; i ++){
         File* file = p->file_table[i];
-        unref_file(file);
+        if (file){
+            unref_file(file);
+        }
     }
 
     critical_exit();
@@ -336,7 +352,6 @@ void free_user_process(Process* p){
 Process* find_ready_process(){
     critical_enter();
 
-    // pr_debug("find_ready_process");
     int idx = (current_process->pid + 1) % PROCESS_MAX_COUNT;
     for (int i = 0; i < PROCESS_MAX_COUNT; i ++, idx = (idx + 1) % PROCESS_MAX_COUNT){
         if (idx == 0) continue; // 优先跳过空闲进程
@@ -355,14 +370,11 @@ Process* find_ready_process(){
 
 // Give up the CPU for one scheduling round.
 void yield(void) {
-    // pr_debug("yield");
     Process *old = current_process;
     current_process = find_ready_process();
-    
+
     if (old->state == PROC_RUNNING) old->state = PROC_READY;
     current_process->state = PROC_RUNNING;
-
-    // pr_debug("change the process from pid=%d to pid=%d", old->pid, current_process->pid);
 
     if (old == current_process){
         return;  // 不切换
@@ -372,7 +384,6 @@ void yield(void) {
 }
 
 void scheduler(void) {
-    pr_debug("scheduler");
     Process *p;
 
     while (1){
@@ -384,13 +395,8 @@ void scheduler(void) {
             pr_warn("cpu is idle");
             WAITING_INT;
         }else{
-            // pr_cont_debug("current_process is "); process_debug(current_process);
             p->state = PROC_RUNNING;
             Process *old = current_process;
-
-            // debug
-            // pr_cont_debug("switch to the process : "); process_debug(p);
-
             current_process = p;
             switch_ctx(&old->context, &current_process->context);
         }
@@ -408,12 +414,6 @@ i64 kfork(const char * name){
     if (p == NULL) return -1;
 
     p->name = name;
-
-    // process_debug(fa);
-    // process_debug(p);
-    
-    // copy normal page
-    // pr_debug("copy normal page");
 
     // 1. data
     if unlikely (copy_page_table(
@@ -485,10 +485,9 @@ void sleep(){
 u64 kwait(u64 exit_number){
     i64 copy_size = sizeof(current_process->exit_number);
 
-    sleep_prepare(current_process);
-
     while (1) {
         bool haschild = false;
+
         for (int i = 1; i < PROCESS_MAX_COUNT; i++) {
             critical_enter();
             bool is_child  = (process_list[i].father == current_process);
@@ -499,11 +498,9 @@ u64 kwait(u64 exit_number){
             haschild = true;
 
             if (is_zombie) {
+
                 if (exit_number &&
-                    copy_to_user(current_process->page_table, 
-                    exit_number,
-                    (void *)&process_list[i].exit_number, 
-                    copy_size
+                    copy_to_user(current_process->page_table, (void *)exit_number, (void *)&process_list[i].exit_number, copy_size
                 ) != copy_size) {
                     current_process->chan = NULL;
                     return -1;
@@ -518,6 +515,8 @@ u64 kwait(u64 exit_number){
         if (!haschild || current_process->is_killed) {
             return -1;
         }
+
+        sleep_prepare(current_process);
         sleep();
     }
 }
@@ -545,7 +544,6 @@ void kexit(i64 exit_number){
 
     abandon_child(current_process);
     wakeup(current_process->father);
-    // pr_debug("current_process->father pid = %d", current_process->father->pid);
 
     current_process->exit_number = exit_number;
     current_process->state = PROC_ZOMBIE;
@@ -555,7 +553,10 @@ void kexit(i64 exit_number){
     PANIC("ZOMBIE ALIVE !!!");
 }
 
-/* 唤醒所有等待chan的进程 */
+/* 
+ * 唤醒所有等待chan的进程 
+ * void * chan 可以是任意的东西，变量，进程都可以
+ */
 void wakeup(void *chan){
     for (int i = 0; i < PROCESS_MAX_COUNT; i++){
         Process *p = &process_list[i];
@@ -614,25 +615,7 @@ void kpfree(u64 page_count){
 
 failed:
     current_process->is_killed = true; // 杀
-    current_process->exit_number = ERR_MEM;
+    current_process->exit_number = -1;
     return;
-}
-
-i64 kread(i64 fd, void *buf, size_t len){
-    if (fd < 0) return -1;
-    File* file = current_process->file_table[fd];
-    i64 res = file_read(file, buf, len);
-    return res;
-}
-
-i64 kwrite(i64 fd, void *buf, size_t len){
-    if (fd < 0) return -1;
-    File* file = current_process->file_table[fd];
-    i64 res = file_write(file, buf, len);
-    return res;
-}
-
-i64 kopen(const char * filepath, u32 flags){
-    return open_file(sv_lit(filepath), flags, test_file_op, );
 }
 

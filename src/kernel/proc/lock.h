@@ -35,5 +35,5 @@ void spinlock_init(SpinLock* lk, char name);
 bool spinlock_try_acquire(SpinLock *lk);
 void spinlock_release(SpinLock *lk);
 void spinlock_acquire(SpinLock *lk);
-bool spinlock_debug(SpinLock *lk);
+bool spinlock_display(SpinLock *lk);
 #endif

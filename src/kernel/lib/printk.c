@@ -1,24 +1,10 @@
 #include "kernel/lib/printk.h"
 #include "kernel/lib/string.h"
-#include "kernel/arch/sbi.h"
+#include "kernel/arch/console.h"
 
 #define isdigit(x) ((x) >= '0' && (x) <= '9') 
 
 u64 print_filter_level = 0;
-
-void puts(char *s){
-    int idx; char a;
-    for (idx = 0, a = s[0]; a; idx ++, a = s[idx]){
-        sbi_console_putchar(a);
-    }
-}
-
-void puts_n(char *s, u64 count){
-    for (u64 i = 0; i < count; i ++){
-        sbi_console_putchar(s[i]);
-    }
-}
-
 static int skip_atoi(const char **s){
     int i = 0;
 
