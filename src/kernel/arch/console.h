@@ -1,9 +1,10 @@
 #pragma once
-#include "kernel/arch/sbi.h"
+#include "kernel/lib/def.h"
 
-extern int console_chan;
-#define CONSOLE_CHAN        ((void *)&console_chan)
+void console_putc(int c);
+int console_write(void* src, int n);
+int console_read(void* dst, int n);
 
-void puts(char *s);
-void puts_n(char *s, u64 count);
+void console_intr(int c);
+void console_init(void);
 

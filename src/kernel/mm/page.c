@@ -195,6 +195,19 @@ void kernel_page_init(){
         void * page = kalloc_page();
         kernel_mappages(kernel_page_table, KERNEL_STACK(i), PAGE_SIZE, (u64)page, PTE_R | PTE_W);
     }
+
+    kernel_mappages(kernel_page_table,
+        UART0, PAGE_SIZE, UART0, PTE_R | PTE_W
+    );
+
+    kernel_mappages(kernel_page_table,
+        VIRTIO0, PAGE_SIZE, VIRTIO0, PTE_R | PTE_W
+    );
+
+    // 4 PAGE
+    kernel_mappages(kernel_page_table,
+        PLIC, 0x400000, PLIC, PTE_R | PTE_W
+    );
 }
 
 /*

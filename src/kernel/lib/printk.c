@@ -1,10 +1,62 @@
 #include "kernel/lib/printk.h"
 #include "kernel/lib/string.h"
+
+#include "kernel/arch/sbi.h"
 #include "kernel/arch/console.h"
+
+#include "kernel/proc/lock.h"
 
 #define isdigit(x) ((x) >= '0' && (x) <= '9') 
 
+volatile int panicking = 0; // printing a panic message
+volatile int panicked = 0;  // spinning forever at end of a panic
+
 u64 print_filter_level = 0;
+
+void __old_puts_n(char *str, size_t len){
+    for (u64 i = 0; i < len; i ++){
+        sbi_console_putchar(str[i]);
+    }
+}
+
+void __old_puts(char *str){
+    u64 len = strlen(str);
+    for (u64 i = 0; i < len; i ++){
+        sbi_console_putchar(str[i]);
+    }
+}
+
+int __old_printk(const char *fmt, ...){
+    critical_enter();
+
+    char printf_buf[1024];
+    va_list args;
+    int printed;
+
+    va_start(args, fmt);
+    printed = vsprintf(printf_buf, fmt, args);
+    va_end(args);
+
+    __old_puts(printf_buf);
+
+    critical_exit();
+    return printed;
+}
+
+
+void puts(char *str){
+    u64 len = strlen(str);
+    for (u64 i = 0; i < len; i ++){
+        console_putc(str[i]);
+    }
+}
+
+void puts_n(char *str, size_t len){
+    for (u64 i = 0; i < len; i ++){
+        console_putc(str[i]);
+    }
+}
+
 static int skip_atoi(const char **s){
     int i = 0;
 
@@ -285,6 +337,7 @@ int sprintf(char *buf, const char *fmt, ...){
 
 int printk(KernelPrintLevel level, const char *fmt, ...){
     if (level & print_filter_level) return -1;
+    critical_enter();
 
     char printf_buf[1024];
     va_list args;
@@ -296,6 +349,7 @@ int printk(KernelPrintLevel level, const char *fmt, ...){
 
     puts(printf_buf);
 
+    critical_exit();
     return printed;
 }
 

@@ -386,10 +386,11 @@ void yield(void) {
 void scheduler(void) {
     Process *p;
 
+    critical_enter();
     while (1){
-        interrupt_on();
-        interrupt_off();
-        
+        critical_exit();
+        critical_enter();
+
         p = find_ready_process();
         if (p == &process_list[0]){
             pr_warn("cpu is idle");

@@ -1,5 +1,8 @@
-#include "kernel/arch/trap.h"
-#include "kernel/arch/timer.h"
+#include "trap.h"
+#include "timer.h"
+#include "sbi.h"
+#include "plic.h"
+#include "uart.h"
 
 #include "kernel/syscall/syscall.h"
 #include "kernel/proc/process.h"
@@ -18,14 +21,15 @@ EXTERN_FUNC(void user_trap_ret(u64));
 
 enum DeviceTrapType{
     DeviceError, // 错误
-    DevcieTimer, // 时间中断
+    DeviceTimer, // 时间中断
+    DiveceOther, // 其他外设中断
 };
 
-#define is_timer_interrupt(x) (x == 0x8000000000000005UL)
+#define is_timer_interrupt(x)   (( x ) == 0x8000000000000005UL)
+#define is_plic_interrupt(x)    (( x ) == 0x8000000000000009L)
 
-int dev_interrupt();
-void trap_init();
-void process_prepare_return_user();
+static int dev_interrupt();
+static void process_prepare_return_user();
 
 void trap_init(){
     WRITE_CSR(CSR_STVEC, (u64)kernel_trap_entry); // 设置中断向量地址
@@ -36,6 +40,12 @@ void trap_init(){
  */ 
 void kernel_trap_handler(){
     u64 sstatus = READ_CSR(CSR_SSTATUS);
+    u64 scause = READ_CSR(CSR_SCAUSE);
+
+    __old_printk(
+        "kernel trap: scause=%lx sepc=%lx stval=%lx\n",
+        scause, READ_CSR(CSR_SEPC), READ_CSR(CSR_STVAL)
+    );
 
     if ((sstatus & SSTATUS_SPP) == 0){ // from user 
         PANIC("kernel_trap_handler: not from supervisor mode");
@@ -44,12 +54,14 @@ void kernel_trap_handler(){
     if (is_disable_interrupt(NULL)){ // 如果不允许中断
         PANIC("kernel_trap_handler: interrupts not enabled");
     }
-    
-    if (dev_interrupt() != DeviceError){
-        return;
+
+    if (dev_interrupt() == DeviceError){ // 没有问题，设备中断处理完毕
+        PANIC("kernel_trap_handler: unknow trap");
     }
 
-    PANIC("kernel_trap_handler: unknow trap");
+    __old_printk("OK");
+    return;
+
 }
 
 /* 
@@ -112,11 +124,28 @@ u64 user_trap_handler() {
  */
 int dev_interrupt() {
     u64 scause = READ_CSR(CSR_SCAUSE);
-    
+ 
     if (is_timer_interrupt(scause)){
         timer_interrupt();
-        return DevcieTimer;
+        return DeviceTimer;
+    }else if (is_plic_interrupt(scause)){
+        int irq = plic_claim();
+        __old_printk("plic interrupt start");
+
+        if (irq == UART0_IRQ){
+            uart_intr();
+        }else{
+            // pr_warn("unknow device interrupt");
+            __old_printk("unknow device interrupt");
+            goto failed;
+        }
+
+        __old_printk("plic interrupt end");
+        if (irq) plic_complete(irq);
+        return DiveceOther;
     }
+
+failed:
     return DeviceError;
 }
 

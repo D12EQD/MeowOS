@@ -30,12 +30,19 @@ int vsprintf(char *buf, const char *fmt, va_list args);
 int __printf(2, 3) sprintf(char *buf, const char *fmt, ...);
 int __printf(2, 3) printk(KernelPrintLevel level, const char *fmt, ...);
 
+void puts_n(char *str, size_t len);
+void puts(char *str);
+
+void __old_puts_n(char *str, size_t len);
+void __old_puts(char *str);
+int __old_printk(const char *fmt, ...);
+
 void set_print_filter(u64 new_level);
 
-#define PANIC(fmt, ...) do {                                        \
-    interrupt_off();                                                \
-    pr_error("Kernel Panic for the reason : " fmt, ##__VA_ARGS__);  \
-    while (1);                                                      \
+#define PANIC(fmt, ...) do {                                            \
+    interrupt_off();                                                    \
+    __old_printk("Kernel Panic for the reason : " fmt, ##__VA_ARGS__);  \
+    while (1);                                                          \
 } while (0)
 
 #define ASSERT(cond) do{ if unlikely(!( cond )){ PANIC( "assert error " __FILE__ ":%d", __LINE__); } }while(0)
