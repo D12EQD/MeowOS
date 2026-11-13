@@ -19,8 +19,7 @@ static void out_pad(Out *o, char c, int n) {
     while (n-- > 0) out_ch(o, c);
 }
 
-static void out_num(Out *o, u64 val, int base, int width, char pad, int upper, int neg)
-{
+static void out_num(Out *o, u64 val, int base, int width, char pad, int upper, int neg){
     char tmp[32];
     const char *dig = upper ? "0123456789ABCDEF" : "0123456789abcdef";
     int i = 0;
@@ -42,8 +41,7 @@ static void out_num(Out *o, u64 val, int base, int width, char pad, int upper, i
     }
 }
 
-static int vfmt(char *buf, size_t cap, const char *fmt, va_list ap)
-{
+static int vfmt(char *buf, size_t cap, const char *fmt, va_list ap) {
     Out o = { buf, cap, 0 };
 
     for (; *fmt; fmt++) {
@@ -133,11 +131,12 @@ int printf_imple(const char *fmt, ...) {
     char buf[PF_BUF_SIZE];
     va_list ap;
     va_start(ap, fmt);
+
     int n = vfmt(buf, sizeof buf, fmt, ap);
     va_end(ap);
 
     u64 wr = (n < (int)sizeof buf) ? (u64)n : (u64)(sizeof buf - 1);
-    write(1, buf, wr);
+    write(STDOUT, buf, wr);
     return n;
 }
 

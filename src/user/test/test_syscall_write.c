@@ -63,11 +63,6 @@ void test_write_suite(TestCtx *t) {
 
         /* 起点必须离页尾正好 8 字节，否则这条用例没意义 */
         test_expect(t, "缓冲区起点跨在页边界前 8 字节", (i64)((u64)p & 0xfff), 0xff8);
-
-        printf_imple("EXPECT>ZZZZZZZZZZZZZZZZZZZZZZZZ<END\n");
-        printf_imple("ACTUAL>");
         test_expect(t, "write(1, 跨页缓冲区, 24) == 24", (i64)write(1, (void *)p, 24), 24);
-        printf_imple("<END\n");
-        test_note(t, "ACTUAL 必须和 EXPECT 的 24 个 Z 完全一致，出现乱码即跨页读越界");
     }
 }

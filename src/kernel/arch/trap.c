@@ -41,25 +41,19 @@ void trap_init(){
 void kernel_trap_handler(){
     u64 sstatus = READ_CSR(CSR_SSTATUS);
     u64 scause = READ_CSR(CSR_SCAUSE);
-
-    __old_printk(
-        "kernel trap: scause=%lx sepc=%lx stval=%lx\n",
-        scause, READ_CSR(CSR_SEPC), READ_CSR(CSR_STVAL)
-    );
-
+    
     if ((sstatus & SSTATUS_SPP) == 0){ // from user 
         PANIC("kernel_trap_handler: not from supervisor mode");
     }
 
-    if (is_disable_interrupt(NULL)){ // 如果不允许中断
-        PANIC("kernel_trap_handler: interrupts not enabled");
+    if (is_enable_interrupt(NULL)){ // trap 入口硬件应该已经关中断，开着说明有人乱开
+        PANIC("kernel_trap_handler: interrupts should be disabled at trap entry");
     }
 
     if (dev_interrupt() == DeviceError){ // 没有问题，设备中断处理完毕
         PANIC("kernel_trap_handler: unknow trap");
     }
 
-    __old_printk("OK");
     return;
 
 }
@@ -90,10 +84,10 @@ u64 user_trap_handler() {
             PANIC("user page fault: pc=%lx stval=%lx", user_pc, stval);
             break;
         case 8: // syscall
-            // 开启中断，陷入内核态时会自动关中断
             current_process->trap_frame_page->epc += 4;
-            interrupt_on(); 
-            syscall();
+            interrupt_on();
+            syscall(); 
+            interrupt_off();
             break;
         case 13: // page_fault
         case 15: // page_fault
@@ -110,6 +104,7 @@ u64 user_trap_handler() {
         kexit(-1);
     }
     
+
     process_prepare_return_user();
     u64 satp = MAKE_SATP(current_process->page_table);
     
@@ -130,17 +125,15 @@ int dev_interrupt() {
         return DeviceTimer;
     }else if (is_plic_interrupt(scause)){
         int irq = plic_claim();
-        __old_printk("plic interrupt start");
-
+        
+        // 判断中断irq 
         if (irq == UART0_IRQ){
-            uart_intr();
+            uart_intr(); // read ?
         }else{
-            // pr_warn("unknow device interrupt");
-            __old_printk("unknow device interrupt");
+            pr_warn("unknow device interrupt");
             goto failed;
         }
 
-        __old_printk("plic interrupt end");
         if (irq) plic_complete(irq);
         return DiveceOther;
     }
@@ -156,8 +149,6 @@ failed:
  */
 void process_prepare_return_user(){
     // 更新中断向量寄存器为 user_trap_entry 需要进入用户态
-    // trap_frame_debug(current_process->trap_frame_page);
-
     u64 trap_entry = TRAMPOLINE_VADDR + ((u64)user_trap_entry - (u64)trampoline);
     WRITE_CSR(CSR_STVEC, trap_entry);
 
@@ -189,7 +180,6 @@ void fork_ret(void) {
     process_prepare_return_user();
     u64 atp = MAKE_SATP(current_process->page_table);
 
-    interrupt_on();
-
+    // NOTE: 这里不能开中断
     trap_ret(atp);
 }

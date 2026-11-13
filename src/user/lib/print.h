@@ -12,7 +12,11 @@
 #define ANSI_BRIGHT_YELLOW  "\033[1;33m"
 #define ANSI_BRIGHT_GREEN   "\033[1;32m"
 
-#define println(fmt, ...) printf_imple(ANSI_YELLOW fmt ANSI_RESET "\n", ##__VA_ARGS__)
-#define printf(fmt, ...) printf_imple(ANSI_YELLOW fmt ANSI_RESET, ##__VA_ARGS__)
+#define println(fmt, ...)   printf_imple(ANSI_YELLOW fmt ANSI_RESET "\n", ##__VA_ARGS__)
+#define printf(fmt, ...)    printf_imple(ANSI_YELLOW fmt ANSI_RESET, ##__VA_ARGS__)
 
 int printf_imple(const char *fmt, ...);
+
+#define STDOUT  1
+#define STDIN   0
+

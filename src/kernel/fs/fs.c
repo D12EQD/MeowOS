@@ -1,13 +1,15 @@
 #include "file.h"
 #include "fs.h"
 #include "path.h"
-#include "kernel/fs/io.h"
+#include "reg.h"
 
+#include "kernel/fs/io.h"
 #include "kernel/proc/process.h"
 #include "kernel/mm/def.h"
 #include "kernel/lib/printk.h"
 #include "kernel/proc/lock.h"
 
+// 常规目录文件
 FileOp dir_fop = {
     .lseek = NULL,
     .read = NULL,
@@ -16,43 +18,9 @@ FileOp dir_fop = {
     .write = NULL
 };
 
-i64 fs_test_read (File *, char *, size_t n){
-    pr_debug("read");
-    return n;
-}
-
-i64 fs_test_write (File *, const char *, size_t n){
-    pr_debug("write");
-    return n;
-}
-
-i64 fs_test_lseek (File *, i64 , int ){
-    pr_debug("lseek");
-    return 0;
-}
-
-i64 fs_test_readdir (File *, DirEntry *){
-    pr_debug("readdir");
-    return 0;
-}
-
-int fs_test_release (File *){
-    pr_debug("release");
-    return 0;
-}
-
-FileOp test_fop = {
-    .lseek = fs_test_lseek,
-    .read = fs_test_read,
-    .release = fs_test_release,
-    .readdir = fs_test_readdir,
-    .write = fs_test_write
-};
-
-
 void fs_display(void) {
     critical_enter();
-    pr_debug("/");
+    pr_info("/");
     if (root_inode && root_inode->mode == INODE_DIR) {
         fs_dfs(root_inode, "", 0);
     }
@@ -265,7 +233,6 @@ i64 kread(i64 fd, void *buf, size_t len){
 }
 
 i64 kopen(const char * input_path, u32 flags){
-    // TODO: 正式版需要替换为常规文件
     critical_enter();
     
     char file_path[FILE_NAME_MAX]; 
@@ -281,7 +248,9 @@ i64 kopen(const char * input_path, u32 flags){
     }
 
     if (fd == -1) goto failed;
-    File* file = open_file(sv_from_cstr(file_path), flags, &test_fop, INODE_REG);
+
+    // TEST: 正式版需要替换为常规文件
+    File* file = open_file(sv_from_cstr(file_path), flags, &reg_fop, INODE_REG);
 
     if (!file) goto failed;
     current_process->file_table[fd] = file;
@@ -291,4 +260,15 @@ i64 kopen(const char * input_path, u32 flags){
 failed:
     critical_exit();
     return -1;
+}
+
+i64 kclose(i64 fd){
+
+}
+
+i64 kunlink(const char * user_path){
+    char path[FILE_NAME_MAX];
+    i64 ret = copy_str_from_user(current_process->page_table, path, user_path, FILE_NAME_MAX);
+    if (!ret) return -1;
+    return fs_unlink(sv_from_cstr(path)) ? 0 : -1;
 }

@@ -27,7 +27,7 @@ void test_proc_suite(TestCtx *t) {
     test_expect(t, "fork() 在父进程中返回合法 pid", (i64)(pid > 1), 1);
     st = -1;
 
-    // BUG :
+    // BUG: ???
     got = wait(&st);
 
     test_expect(t, "wait() 返回的 pid 等于 fork() 的返回值", (i64)got, (i64)pid);

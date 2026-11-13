@@ -251,7 +251,6 @@ bool first_user_init(Process *proc){
     }
 
     // 4. create stdin stdout
-    
     proc->file_table[STDIN] = open_file(
         sv_lit(IO_STDIN), O_CREATE | O_READ, &io_fop, INODE_IO
     );
@@ -370,6 +369,8 @@ Process* find_ready_process(){
 
 // Give up the CPU for one scheduling round.
 void yield(void) {
+    critical_enter();
+
     Process *old = current_process;
     current_process = find_ready_process();
 
@@ -377,25 +378,39 @@ void yield(void) {
     current_process->state = PROC_RUNNING;
 
     if (old == current_process){
-        return;  // 不切换
+        // 不切换
+    }else{
+        switch_ctx(&old->context, &current_process->context);
     }
 
-    switch_ctx(&old->context, &current_process->context);
+    critical_exit();
 }
 
 void scheduler(void) {
     Process *p;
 
-    critical_enter();
+    interrupt_off();
+    bool idle_displayed = false;
+
     while (1){
-        critical_exit();
-        critical_enter();
+        interrupt_on();
+        interrupt_off();
 
         p = find_ready_process();
-        if (p == &process_list[0]){
-            pr_warn("cpu is idle");
+
+        if (p->pid == 0){
+            if (idle_displayed == false){
+                pr_warn("cpu is idle");
+                idle_displayed = true;
+            }
+
+            interrupt_on();
+            ASSERT(is_enable_interrupt(NULL));
             WAITING_INT;
+            interrupt_off();
+
         }else{
+            idle_displayed = false; // 重新计数
             p->state = PROC_RUNNING;
             Process *old = current_process;
             current_process = p;
@@ -469,17 +484,26 @@ Process * get_proc_from_pid(i64 pid){
     return &process_list[pid];
 }
 
-void sleep_prepare(void *chan){
+/* 睡眠前准备 */
+inline void sleep_prepare(void *chan){
     critical_enter();
     current_process->chan = chan;
+}
+
+/* 睡眠返回 */
+inline void sleep_return(){
     critical_exit();
 }
 
+/* 睡眠 让出当前 cpu */
 void sleep(){
-    if (current_process->chan) {
-        current_process->state = PROC_SLEEP;
-        yield();
-    }
+    critical_enter();
+    ASSERT(current_process->chan != NULL);
+
+    current_process->state = PROC_SLEEP;
+ 
+    yield();
+    critical_exit();
 }
 
 /* 等待一个子进程退出，返回一个u64 */
@@ -519,6 +543,7 @@ u64 kwait(u64 exit_number){
 
         sleep_prepare(current_process);
         sleep();
+        sleep_return();
     }
 }
 

@@ -32,63 +32,47 @@
 static int tx_chan; /* &tx_chan 就是发送的等待通道 */
 
 void uart_init(void) {
-    /*
-     * 先关中断
-     */
     WriteReg(IER, 0x00);
 
-    /*
-     * 进入设置波特率的特殊模式
-     */
+    /* 进入设置波特率的特殊模式 */
     WriteReg(LCR, LCR_BAUD_LATCH);
 
-    /*
-     * 波特率 38.4K 的低字节
-     */
+    /* 波特率 38.4K 的低字节 */
     WriteReg(0, 0x03);
 
-    /*
-     * 波特率 38.4K 的高字节
-     */
+    /* 波特率 38.4K 的高字节 */
     WriteReg(1, 0x00);
 
-    /*
-     * 退出设置波特率模式，
-     * 字长 8 位，无校验
-     */
     WriteReg(LCR, LCR_EIGHT_BITS);
 
-    /*
-     * 复位并使能 FIFO
-     */
     WriteReg(FCR, FCR_FIFO_ENABLE | FCR_FIFO_CLEAR);
 
-    /*
-     * 打开发送和接收中断
-     */
     WriteReg(IER, IER_TX_ENABLE | IER_RX_ENABLE);
 }
 
 /*
  * 把 buf[] 送到 uart。uart 忙时会阻塞，
- * 只能在 write 系统调用里使用
+ * 只在 console_write 中使用
  */
 void uart_write(char* buf, int n){
     int i = 0;
+    if (i >= n) return;
+
+    sleep_prepare(&tx_chan);
+
     while (i < n) {
-        sleep_prepare(&tx_chan);
         if (ReadReg(LSR) & LSR_TX_IDLE) {
             WriteReg(THR, buf[i]);
             i += 1;
         } else {
             sleep();
+            sleep_return();
         }
     }
 }
 
 /*
- * 不走中断直接往 uart 写一个字节，
- * 供内核 printk() 和回显使用。会自旋等待
+ * 不走中断直接往 uart 写一个字节，供内核 printk() 和回显使用。会自旋等待
  * uart 的发送寄存器空出来
  */
 void uart_putc_sync(int c){
@@ -113,8 +97,7 @@ static int uart_get_char(void) {
 }
 
 /*
- * 处理 uart 中断：可能有输入到达，
- * 也可能 uart 准备好接下一个输出了，或者两者都有。
+ * 处理 uart 中断：可能有输入到达，也可能 uart 准备好接下一个输出了，或者两者都有。
  * 由 devintr() 调用
  */
 void uart_intr(void) {

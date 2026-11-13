@@ -71,10 +71,10 @@ void kernel_start() {
     kernel_main();
 }
 
-void kernel_main(){
-    puts("hello world\n");
-
+[[noreturn]] void kernel_main(){
     Process* p = create_user_process();
     first_user_init(p);
+
+    pr_debug("hello kernel");
     scheduler();
 }

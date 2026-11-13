@@ -2,7 +2,7 @@
 #include "kernel/lib/string.h"
 #include "kernel/mm/pmm.h"
 #include "kernel/fs/file.h"
-#include "kernel/fs/fs.h" // TEST: 
+#include "kernel/fs/fs.h"
 
 #include "kernel/proc/lock.h"
 #include "kernel/proc/process.h"
@@ -31,7 +31,6 @@ File* find_empty_file(){
 
 Inode* find_empty_inode(){
     for (u64 i = 0; i < FS_MAX_INODE_COUNT; i ++){
-        // TEST : 
         ASSERT(inode_table[i].ino == i);
         if (inode_table[i].ref == 0) return &inode_table[i];
     }
@@ -213,7 +212,7 @@ void ref_inode(Inode *inode){
     critical_exit();
 }
 
-// --ref，归零时内部 free
+/* inode 引用计数减少，归零时内部 free */
 void unref_inode(Inode *inode){
     critical_enter();
     ASSERT(inode->ref >= 1);
@@ -246,8 +245,9 @@ i64 dir_readdir(File *f, DirEntry *out){
 }
 
 /*
- * 在根目录寻找 path 的父目录，如果 path 的父目录是根目录也成立
- * returns : 
+ *  在根目录寻找 path 的父目录，如果 path 的父目录是根目录也成立
+ *  无法对根目录查找父亲目录
+ *  returns : 
  *      bool : success or faield
  *      fa_inode : Dir Inode
  *      fa_path : Dir path name
@@ -255,18 +255,17 @@ i64 dir_readdir(File *f, DirEntry *out){
 bool lookup_parent(StringView path, Inode **fa_inode, StringView *fa_name){
     critical_enter();
 
-    // 跟目录拒绝
-    if (!is_vaild_path(path) || path.count == 1) goto failed;
+    // 根目录拒绝
+    if unlikely (!is_vaild_path(path) || path.count == 1) goto failed;
 
     StringView dir_path;
-    if (!path_get_dir(path, &dir_path))      goto failed;
-    if (!path_get_filename(path, fa_name))   goto failed;
-    if (fa_name->count == 0 ||
-     fa_name->count >= FILE_NAME_MAX)     goto failed;
+    if unlikely (!path_get_dir(path, &dir_path))      goto failed;
+    if unlikely (!path_get_filename(path, fa_name))   goto failed;
+    if unlikely (fa_name->count == 0 || fa_name->count >= FILE_NAME_MAX) goto failed;
 
     Inode *res = lookup_inode(root_inode, dir_path);
-    if (!res)                       goto failed;
-    if (res->mode != INODE_DIR)     goto failed;   /* /x/y 里 /x 是文件 */
+    if (!res) goto failed;
+    if (res->mode != INODE_DIR)     goto failed;
 
     *fa_inode = res;
 
@@ -438,7 +437,6 @@ void ref_file(File *file){
 
 void unref_file(File * file){
     critical_enter();
-    // TEST:
     ASSERT(file->ref != 0);
     if (-- file->ref == 0){
         unref_inode(file->inode);
@@ -448,11 +446,8 @@ void unref_file(File * file){
 }
 
 /* 创建Inode并且默认引用一次 */
-Inode* create_ref_inode(u64 need_size, u32 mode){
+Inode* create_ref_inode(u64 need_size, u32 mode) {
     Inode* inode = create_inode(need_size, mode);
     ref_inode(inode);
     return inode;
 }
-
-
-

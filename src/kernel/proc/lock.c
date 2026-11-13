@@ -25,7 +25,7 @@ void critical_enter(){
 void critical_exit(){
     u64 sie = 0;
     // 发现进入关中断临界区没有进入直接退出
-    ASSERT(is_enable_interrupt(&sie));
+    ASSERT(is_disable_interrupt(&sie));
     
     cpu.interrput_depth --;
     if (cpu.interrput_depth < 0){ // error

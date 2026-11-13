@@ -36,7 +36,7 @@ u64 sys_fork(){
 void syscall(){
     i64 num;
     Process *p = current_process;
-    
+
     num = p->trap_frame_page->a7;
     if (num >= 0 && num < SYS_COUNT) {
         p->trap_frame_page->a0 = syscall_fn_list[num]();
@@ -120,11 +120,13 @@ u64 sys_dup2(){
 }
 
 u64 sys_readdir(){
+
     return 0;
 }
 
 u64 sys_unlink(){
-    return 0;
+    const char * user_path = (const char *)get_arg(0);
+    return kunlink(user_path);
 }
 
 u64 sys_pipe(){

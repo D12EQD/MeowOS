@@ -69,7 +69,6 @@ Sv39 的虚拟地址
 #define PAGE_UP(sz)  (((sz) + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1))
 #define PAGE_DOWN(sz) (((sz)) & ~(PAGE_SIZE - 1))
 
-
 typedef u64 pte_t;     // 页表项
 typedef pte_t* pt_t;   // 页表
 

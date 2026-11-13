@@ -19,7 +19,5 @@ void test_fs(TestCtx *t){
     test_expect(t, "确认fd", fd == 2 && fd2 == 3, true);
 
     char output = 'a';
-    int res = write(fd, &output, 1);
-
-    test_expect(t, "检测输出", res == sizeof(output), true);
+    test_expect(t, "检测输出", write(fd2, &output, 1), 1);
 }

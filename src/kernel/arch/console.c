@@ -57,11 +57,13 @@ int console_write(void* src, int n) {
     int i = 0;
 
     while (i < n) {
-        int nn = sizeof(buf);
-        if (nn > n - i) nn = n - i;
-        if (memcpy(buf, src, nn) != nn) break;
-        uart_write(buf, nn);
-        i += nn;
+        i64 cost = min(sizeof(buf), n - i);
+
+        if unlikely (cost < 0) PANIC("buffer offset error");
+        if unlikely (memcpy(buf, src + i, cost) != cost) break;
+
+        uart_write(buf, cost);
+        i += cost;
     }
 
     return i;
@@ -75,10 +77,13 @@ int console_write(void* src, int n) {
  *      scr 需要输入的内容地址
  *      n 输入长度
  *  return:
- *      int 输入了多少字节
+ *      >= 0 int 输入了多少字节
+*       < 0 failed
  *
  */
 int console_read(void* dst, int n) {
+    pr_debug("console read");
+
     u32 target;
     int c;
     char cbuf;
@@ -90,11 +95,12 @@ int console_read(void* dst, int n) {
                 return -1;
             }
 
+            pr_debug("console read try to sleep the process");
             sleep_prepare(&cons.r);
             sleep();
         }
 
-        c = cons.buf[cons.r++ % INPUT_BUF_SIZE];
+        c = cons.buf[(cons.r++) % INPUT_BUF_SIZE];
 
         if (c == C('D')) { // 文件结束
             if (n < target) {
@@ -103,12 +109,12 @@ int console_read(void* dst, int n) {
             break;
         }
 
-        // 把输入字节拷进用户空间缓冲
+        // 把输入字节拷进 io inode 空间缓冲
         cbuf = c;
         if (memcpy(dst, &cbuf, 1) != 1) break;
 
-        dst++;
-        --n;
+        dst ++;
+        -- n;
 
         if (c == '\n') break;
     }
@@ -163,4 +169,7 @@ void console_intr(int c) {
 
 void console_init(void) {
     uart_init();
+    // 打开 S 态外部中断（uart_intr 靠它进来）
+    // NOTE: SET_CSR 是 csrs，只置位，不会清掉 timer_init 设的 STIE
+    SET_CSR(CSR_SIE, (1 << 9));
 }

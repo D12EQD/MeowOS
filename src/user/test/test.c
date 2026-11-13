@@ -66,7 +66,10 @@ void test_run_all(void) {
     test_global_data_suite(&t);
     test_write_suite(&t);
     test_proc_suite(&t);
+
+    // test_read_suite(&t);
     test_fs(&t);
+
     println("OK");
 
     test_summary(&t);

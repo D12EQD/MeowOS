@@ -13,11 +13,11 @@
 #define PROCESS_MAX_FD_COUNT        16   // 单个进程最大打开文件数量
 #define PROCESS_STACK_PAGE_END      (KERNEL_STACK(PROCESS_MAX_COUNT) - 3 * PAGE_SIZE)
 #define PROCESS_STACK_PAGE_START    (PROCESS_STACK_PAGE_END - PAGE_SIZE * PROCESS_STACK_PAGE_COUNT)
+#define PROC_TOP_VADDR(page_count) (UESR_HEAP_START + (page_count) * PAGE_SIZE)
 
 // 固定两个文件描述符
 #define STDIN   0
 #define STDOUT  1
-
 
 enum proc_state{
     PROC_UNUSED,    // 未使用的进程控制结构
@@ -124,8 +124,11 @@ Process *find_ready_process();
 void yield(void);
 i64 kfork(const char *name);
 Process *get_proc_from_pid(i64 pid);
+
 void sleep_prepare(void *chan);
 void sleep();
+void sleep_return();
+
 u64 kwait(u64 exit_number);
 void kkill(i64 pid);
 void abandon_child(Process *p);

@@ -1,3 +1,6 @@
+/*
+ *  通用文件定义，定义普通字节文件和目录文件
+ */
 #pragma once
 #include "kernel/lib/def.h"
 #include "kernel/lib/string.h"
@@ -21,6 +24,10 @@ typedef enum {
 #define O_WRITE     0b00010
 #define O_RW        O_READ | O_WRITE
 #define O_CREATE    0b00100
+
+#define SEEK_SET    0b00001     /* The file offset is set to offset bytes. */
+#define SEEK_CUR    0b00010     /* The file offset is set to its current location plus offset bytes. */
+#define SEEK_END    0b00100     /* The file offset is set to the size of the file plus offset bytes. */
 
 struct Inode_S;
 struct FileOp_S;
