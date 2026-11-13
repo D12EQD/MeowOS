@@ -13,7 +13,8 @@
 FileOp dir_fop = {
     .lseek = NULL,
     .read = NULL,
-    .release = NULL, // TODO : 释放空间
+    .release = dir_release, // TODO : 释放空间
+    .free = dir_free,
     .readdir = dir_readdir,
     .write = NULL
 };
@@ -178,24 +179,6 @@ failed:
     return false;
 }
 
-/* 关闭进程打开的文件描述符 */
-bool fs_close(int fd){
-    critical_enter();
-    if (fd >= PROCESS_MAX_FD_COUNT) goto failed;
-
-    File *f = current_process->file_table[fd];
-    if (!f) goto failed;
-    f->op->release(f);
-    unref_file(f);
-    current_process->file_table[fd] = NULL;
-
-    critical_exit();
-    return true;
-failed:
-    critical_exit();
-    return false;
-}
-
 /* ref_file + 返回同一指针 */
 File *dup_file(File *f){
     critical_enter();
@@ -204,71 +187,3 @@ File *dup_file(File *f){
     return f;
 }
 
-
-/* 
- * 内核的文件系统实现的系统调用接口
- * 注，内核的kwrite kread kopen 所有指针都来自用户，需要转换和判断
- */
-i64 kwrite(i64 fd, void *buf, size_t len){
-    if (fd < 0) return -1;
-    if (fd >= PROCESS_MAX_FD_COUNT) return -1;
-
-    File* file = current_process->file_table[fd];
-
-    if (!file) return -1;
-
-    i64 res = file_write(file, buf, len);
-    return res;
-}
-
-i64 kread(i64 fd, void *buf, size_t len){
-    if (fd < 0) return -1;
-    if (fd >= PROCESS_MAX_FD_COUNT) return -1;
-
-    File* file = current_process->file_table[fd];
-    if (!file) return -1;
-
-    i64 res = file_read(file, buf, len);
-    return res;
-}
-
-i64 kopen(const char * input_path, u32 flags){
-    critical_enter();
-    
-    char file_path[FILE_NAME_MAX]; 
-    copy_str_from_user(current_process->page_table, (void *)file_path, (void *)input_path, FILE_NAME_MAX);
-    int fd = -1;
-
-    // 找一个 fd 空槽存放
-    for (u64 i = 0; i < PROCESS_MAX_FD_COUNT; i ++){
-        if (current_process->file_table[i] == NULL){
-            fd = i;
-            break;
-        }
-    }
-
-    if (fd == -1) goto failed;
-
-    // TEST: 正式版需要替换为常规文件
-    File* file = open_file(sv_from_cstr(file_path), flags, &reg_fop, INODE_REG);
-
-    if (!file) goto failed;
-    current_process->file_table[fd] = file;
-
-    critical_exit();
-    return fd;
-failed:
-    critical_exit();
-    return -1;
-}
-
-i64 kclose(i64 fd){
-
-}
-
-i64 kunlink(const char * user_path){
-    char path[FILE_NAME_MAX];
-    i64 ret = copy_str_from_user(current_process->page_table, path, user_path, FILE_NAME_MAX);
-    if (!ret) return -1;
-    return fs_unlink(sv_from_cstr(path)) ? 0 : -1;
-}

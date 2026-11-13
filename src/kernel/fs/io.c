@@ -75,8 +75,6 @@ i64 io_write(File *file, const char *buf, size_t n){
 FileOp io_fop = {
     .read = io_read,
     .write = io_write,
-    .lseek = NULL,
-    .release = NULL
 };
 
 

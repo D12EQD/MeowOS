@@ -58,11 +58,19 @@ typedef struct File_S {
 } File;
 
 typedef struct FileOp_S {
+    // 读写文件内容
     i64 (*read)(File *f, char *buf, size_t n);
     i64 (*write)(File *f, const char *buf, size_t n);
     i64 (*lseek)(File *f, i64 offset, int whence);
-    i64 (*readdir)(File *f, DirEntry *out); // 目录专用
-    int (*release)(File *f);
+
+    // 目录专用，读取文件目录项并且返回 out
+    i64 (*readdir)(File *f, DirEntry *out);
+ 
+    // 仅释放文件资源，需要处理引用计数
+    i64 (*release)(File *f);
+
+    // 引用计数为0时调用，不应该被直接调用，unref_file 应该为唯一调用点
+    i64 (*free)(File* f);
 } FileOp;
 
 File *find_empty_file();
@@ -74,20 +82,26 @@ bool insert_dir_entry(Inode *fa,Inode *son,StringView fname);
 void clean_dir_entry(Inode *fa_inode,DirEntry *e);
 bool remove_dir_entry(Inode *fa,Inode *son);
 DirEntry *lookup_dir_entry(Inode *fa,StringView sv);
-void free_inode(Inode *inode);
+
 void ref_inode(Inode *inode);
+void free_inode(Inode *inode);
 void unref_inode(Inode *inode);
-i64 dir_readdir(File *f,DirEntry *out);
+
 bool lookup_parent(StringView path,Inode **fa_inode,StringView *fa_name);
 Inode *lookup_inode(Inode *dir,StringView path);
 File *open_file(StringView name,u32 flags,FileOp *operation,u32 i_mode);
 
 i64 file_read(File *f,char *buf,u64 n);
 i64 file_write(File *f,const char *buf,u64 n);
-void free_file(File *file);
+
 void ref_file(File *file);
 void unref_file(File *file);
 Inode *create_ref_inode(u64 need_size,u32 mode);
+
+// dir opeation
+i64 dir_free(File* f);
+i64 dir_release(File * f);
+i64 dir_readdir(File *f, DirEntry *out);
 
 /* public */
 
@@ -96,4 +110,4 @@ extern File* root_file;
 extern Inode inode_table[];
 extern File file_table[];
 
-
+#define is_vaild_fd(fd) (( fd ) < 0 || ( fd ) >= PROCESS_MAX_FD_COUNT)

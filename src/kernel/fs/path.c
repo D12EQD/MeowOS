@@ -1,5 +1,6 @@
 #include "kernel/fs/file.h"
 #include "kernel/fs/path.h"
+#include "kernel/proc/process.h"
 
 #define isspace(x) (x == ' ')
 #define base_check(ch) ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || (c == '.') || (c == '_'))
@@ -75,4 +76,3 @@ bool is_vaild_path(StringView path){
     if (path.data[path.count - 1] == '/') return false; // 末尾不可为 /
     return true;
 }
-

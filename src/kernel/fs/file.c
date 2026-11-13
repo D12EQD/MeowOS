@@ -244,6 +244,28 @@ i64 dir_readdir(File *f, DirEntry *out){
     return -1;
 }
 
+i64 dir_release(File* f){
+    ASSERT(f && f->inode);
+    unref_inode(f->inode);
+    return 0;
+}
+
+/*
+ *  只对子目录的Inode进行减少引用
+ */
+i64 dir_free(File* f){
+    critical_enter();
+    int count = f->inode->cap / sizeof(DirEntry);
+    DirEntry* dir = (DirEntry*)f->inode->vaddr;
+
+    for (int i = 0; i < count; i ++){
+        if (dir[i].inode) unref_inode(dir[i].inode);
+    }
+
+    critical_exit();
+    return 0;
+}
+
 /*
  *  在根目录寻找 path 的父目录，如果 path 的父目录是根目录也成立
  *  无法对根目录查找父亲目录
@@ -423,12 +445,6 @@ i64 file_write(File *f, const char *buf, u64 n){
     return cost;
 }
 
-void free_file(File* file){
-    i64 offset = ( (u64)file - (u64)file_table ) / sizeof(File);
-    ASSERT(offset >= 0 && offset < FS_MAX_FILE_COUNT);
-    memset(file, 0, sizeof(File));
-}
-
 void ref_file(File *file){
     critical_enter();
     file->ref ++;
@@ -439,8 +455,8 @@ void unref_file(File * file){
     critical_enter();
     ASSERT(file->ref != 0);
     if (-- file->ref == 0){
-        unref_inode(file->inode);
-        free_file(file);
+        file->op->free(file); // 唯一调用 free 地点
+        unref_inode(file->inode); // 对 inode 进行解引用
     }
     critical_exit();
 }
@@ -451,3 +467,5 @@ Inode* create_ref_inode(u64 need_size, u32 mode) {
     ref_inode(inode);
     return inode;
 }
+
+

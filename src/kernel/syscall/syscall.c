@@ -4,6 +4,7 @@
 #include "kernel/proc/process.h"
 
 #include "kernel/fs/fs.h"
+#include "kernel/fs/reg.h"
 
 #include "kernel/syscall/syscall.h"
 
@@ -81,52 +82,163 @@ u64 sys_pfree(void){
     return true;
 }
 
-u64 sys_write(){
-    i64 fd = (i64) get_arg(0);
+u64 sys_write(void){
+    i64 fd = (i64)get_arg(0);
     void *buf = (void *)get_arg(1);
-    u64 len = get_arg(2);
-    return kwrite(fd, buf, len);
+    size_t len = get_arg(2);
+
+    if (!is_vaild_fd(fd)) return -1;
+    File *file = current_process->file_table[fd];
+    if unlikely(!file) return -1;
+
+    return file_write(file, buf, len);
 }
 
-u64 sys_read(void){ 
-    i64 fd = (i64) get_arg(0);
+u64 sys_read(void){
+    i64 fd = (i64)get_arg(0);
     void *buf = (void *)get_arg(1);
-    u64 len = get_arg(2);
-    return kread(fd, buf, len);
+    size_t len = get_arg(2);
+
+    if (!is_vaild_fd(fd)) return -1;
+
+    File *file = current_process->file_table[fd];
+    if unlikely(!file) return -1;
+
+    return file_read(file, buf, len);
 }
 
 u64 sys_open(void){
-    const char *name = (const char *)get_arg(0);
-    u32 flag = (u32)get_arg(1);
-    i64 res = kopen(name, flag);
-    return res;
+    const char *input_path = (const char *)get_arg(0);
+    u32 flags = (u32)get_arg(1);
+
+    critical_enter();
+
+    char file_path[FILE_NAME_MAX];
+    i64 len = copy_str_from_user(
+        current_process->page_table, file_path,
+        (void *)input_path, FILE_NAME_MAX
+    );
+    if (len <= 0) goto failed;
+
+    int fd = process_find_empty_fd();
+    if (!is_vaild_fd(fd)) goto failed;
+
+    // 未说明都是 reg 文件
+    File *file = open_file(sv_from_cstr(file_path), flags, &reg_fop, INODE_REG);
+    if (!file) goto failed;
+
+    current_process->file_table[fd] = file;
+    critical_exit();
+    return fd;
+
+failed:
+    critical_exit();
+    return -1;
 }
 
+u64 sys_close(void){
+    i64 fd = (i64)get_arg(0);
+    if (!is_vaild_fd(fd)) return -1;
 
-u64 sys_close(void){ 
-    return 0; 
+    critical_enter();
+    File *file = current_process->file_table[fd];
+
+    if (!file) goto failed;
+
+    if (file->op && file->op->release) {
+        file->op->release(file);
+    }
+
+    current_process->file_table[fd] = NULL;
+
+    critical_exit();
+    return 0;
+
+failed:
+    critical_exit();
+    return -1;
 }
+
+u64 sys_unlink(void){
+    const char *user_path = (const char *)get_arg(0);
+    char path[FILE_NAME_MAX];
+
+    i64 ret = copy_str_from_user(
+        current_process->page_table, path,
+        (void *)user_path, FILE_NAME_MAX
+    );
+    if (ret <= 0) return -1;
+
+    return fs_unlink(sv_from_cstr(path)) ? 0 : -1;
+}
+
 
 u64 sys_mkdir(void){
-    return 0;
+    const char *user_path = (const char *)get_arg(0);
+    char path[FILE_NAME_MAX];
+
+    i64 ret = copy_str_from_user(
+        current_process->page_table, path,
+        (void *)user_path, FILE_NAME_MAX
+    );
+    if (ret <= 0) return -1;
+ 
+    return fs_mkdir(sv_from_cstr(user_path)) ? 0 : -1;
 }
 
-u64 sys_dup(){
-    return 0;
+u64 sys_dup(void){
+    i64 fd = (i64)get_arg(0);
+    if (!is_vaild_fd(fd)) return -1;
+    critical_enter();
+
+    File * file = current_process->file_table[fd];
+    if (!file) goto failed;
+
+    i64 new_fd = process_find_empty_fd();
+    if (new_fd < 0) goto failed;
+
+    current_process->file_table[new_fd] = dup_file(file);
+    
+    critical_exit();
+    return new_fd;
+failed:
+    critical_exit();
+    return -1;
 }
 
 u64 sys_dup2(){
+    i64 old_fd = (i64)get_arg(0);
+    i64 new_fd = (i64)get_arg(1);
+
+    if (!is_vaild_fd(old_fd)) return -1;
+    if (!is_vaild_fd(old_fd)) return -1;
+
+    critical_enter();
+
+    File *old_file = current_process->file_table[old_fd];
+    if (!old_file) goto failed;
+
+    // 相同 fd 情况什么都不做
+    if (old_fd == new_fd) return new_fd;
+
+    File *new_file = current_process->file_table[new_fd];
+
+    // 如果new_fd被占用，强制关闭
+    if (new_file){
+        // 目录没有 release
+        if (new_file->op->release) new_file->op->release(new_file);
+    }
+    critical_exit();
     return 0;
+
+failed:
+    critical_exit();
+    return -1;
 }
 
 u64 sys_readdir(){
 
     return 0;
-}
-
-u64 sys_unlink(){
-    const char * user_path = (const char *)get_arg(0);
-    return kunlink(user_path);
 }
 
 u64 sys_pipe(){

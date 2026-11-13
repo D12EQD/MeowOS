@@ -97,9 +97,14 @@ i64 reg_lseek(File *f, i64 offset, int whence) {
     return target;
 }
 
-int reg_release(File *f){
+i64 reg_release(File *f){
     ASSERT(f);
     unref_file(f);
+    return 0;
+}
+
+i64 reg_free(File *){
+    // 没有资源
     return 0;
 }
 
@@ -107,6 +112,7 @@ FileOp reg_fop = {
     .lseek = reg_lseek,
     .release = reg_release,
     .read = reg_read,
-    .write = reg_write
+    .write = reg_write,
+    .free = reg_free
 };
 

@@ -645,3 +645,17 @@ failed:
     return;
 }
 
+/*
+ *  首先寻找一个空闲位置存放新文件描述符
+ *  调用者应该需要解决并发问题
+ */
+i64 process_find_empty_fd(){
+    i64 fd = -1;
+    for (u64 i = 0; i < PROCESS_MAX_FD_COUNT; i ++){
+        if (current_process->file_table[i] == NULL){
+            fd = i;
+            break;
+        }
+    }
+    return fd;
+}

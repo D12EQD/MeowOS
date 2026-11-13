@@ -17,9 +17,4 @@ bool fs_rmdir(StringView path);
 bool fs_close(int fd);
 File *dup_file(File *f);
 
-i64 kwrite(i64 fd, void *buf, size_t len);
-i64 kread(i64 fd, void *buf, size_t len);
-i64 kopen(const char * filepath, u32 flags);
-i64 kunlink(const char * user_path);
-
 i64 fs_test_write (File *, const char *, size_t n);

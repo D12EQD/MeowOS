@@ -123,7 +123,9 @@ void free_user_process(Process *p);
 Process *find_ready_process();
 void yield(void);
 i64 kfork(const char *name);
+
 Process *get_proc_from_pid(i64 pid);
+i64 process_find_empty_fd();
 
 void sleep_prepare(void *chan);
 void sleep();
