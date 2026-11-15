@@ -82,7 +82,6 @@ int console_write(void* src, int n) {
  *
  */
 int console_read(void* dst, int n) {
-    pr_debug("console read");
 
     u32 target;
     int c;
@@ -95,7 +94,6 @@ int console_read(void* dst, int n) {
                 return -1;
             }
 
-            pr_debug("console read try to sleep the process");
             sleep_prepare(&cons.r);
             sleep();
         }

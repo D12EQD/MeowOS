@@ -3,8 +3,6 @@
 #include "user/lib/print.h"
 #include "user/test/test.h"
 
-int val[10];
-
 int user_main(){
     println("hello user");
 

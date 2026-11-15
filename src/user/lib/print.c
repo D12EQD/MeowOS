@@ -136,6 +136,7 @@ int printf_imple(const char *fmt, ...) {
     va_end(ap);
 
     u64 wr = (n < (int)sizeof buf) ? (u64)n : (u64)(sizeof buf - 1);
+
     write(STDOUT, buf, wr);
     return n;
 }

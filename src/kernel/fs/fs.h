@@ -15,6 +15,16 @@ bool fs_mkdir(StringView path);
 bool fs_unlink(StringView path);
 bool fs_rmdir(StringView path);
 bool fs_close(int fd);
+
 File *dup_file(File *f);
 
 i64 fs_test_write (File *, const char *, size_t n);
+
+#define get_file_from_fd(fd)                            \
+({                                                      \
+    File * __file_temp = NULL;                          \
+    if (!is_invaild_fd(fd)){                            \
+        __file_temp = current_process->file_table[fd];  \
+    }                                                   \
+    __file_temp;                                        \
+})

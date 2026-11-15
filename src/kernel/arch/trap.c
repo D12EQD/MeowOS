@@ -59,7 +59,7 @@ void kernel_trap_handler(){
 }
 
 /* 
- * 用户程序异常处理程序
+ * 用户程序 中断 | 异常 处理程序
  */ 
 u64 user_trap_handler() {
     u64 scause = READ_CSR(CSR_SCAUSE);
@@ -103,11 +103,10 @@ u64 user_trap_handler() {
     if (current_process->is_killed){
         kexit(-1);
     }
-    
 
     process_prepare_return_user();
     u64 satp = MAKE_SATP(current_process->page_table);
-    
+
     // return to trampolite.S 的 user_ret
     return satp;
 }

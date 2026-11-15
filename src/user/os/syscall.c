@@ -59,3 +59,36 @@ void pfree(u64 page_count){
 i64 open(const char *name, u32 flags){
     return syscall(SYS_OPEN, (u64)name, (u64)flags, 0, 0, 0, 0);
 }
+
+i64 mkdir(const char *name){
+    return syscall(SYS_MKDIR, (u64)name, 0, 0, 0, 0, 0);
+}
+
+i64 unlink(const char *name){
+    return syscall(SYS_UNLINK, (u64)name, 0, 0, 0, 0, 0);
+}
+
+i64 dup(i64 fd){
+    return syscall(SYS_DUP, (u64)fd, 0, 0, 0, 0, 0);
+}
+
+i64 dup2(i64 oldfd, i64 newfd){
+    return syscall(SYS_DUP2, (u64)oldfd, (u64)newfd, 0, 0, 0, 0);
+}
+
+i64 readdir(i64 fd, DirEntry *out){
+    return syscall(SYS_READDIR, (u64)fd, (u64)out, 0, 0, 0, 0);
+}
+
+i64 close(i64 fd){
+    return syscall(SYS_CLOSE, fd, 0, 0, 0, 0, 0);
+}
+
+i64 lseek(i64 fd, i64 offset, i64 flag){
+    return syscall(SYS_LSEEK, fd, offset, flag, 0, 0, 0);
+}
+
+/* fd1 读管道 fd2 写管道 */
+i64 pipe(i64* fd1, i64* fd2){
+    return syscall(SYS_PIPE, (u64)fd1, (u64)fd2, 0, 0, 0, 0);
+}

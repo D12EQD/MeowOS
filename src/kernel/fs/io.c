@@ -14,7 +14,6 @@
  *  否则中断进不来、没人能 wakeup 本进程。
  */
 i64 io_read(File *file, char *buf, size_t n){
-    pr_debug("io_read");
     char* kbuf = (char *)( file->inode->vaddr );
 
     u64 recv_total = 0;

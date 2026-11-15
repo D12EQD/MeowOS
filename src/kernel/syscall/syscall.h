@@ -26,7 +26,8 @@
     X(DUP2,     dup2,   13)         \
     X(READDIR,  readdir, 14)        \
     X(UNLINK,   unlink, 15)         \
-    X(PIPE,     pipe,   16)
+    X(PIPE,     pipe,   16)         \
+    X(LSEEK,    lseek,  17)
 
 typedef u64 (*syscall_fn_t)(void);
 

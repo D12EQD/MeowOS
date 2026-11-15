@@ -1,26 +1,16 @@
 #include "kernel/lib/def.h"
 #include "kernel/lib/string.h"
-#include "kernel/mm/pmm.h"
-#include "kernel/fs/file.h"
-#include "kernel/fs/fs.h"
 
 #include "kernel/proc/lock.h"
+#include "kernel/mm/def.h"
 #include "kernel/proc/process.h"
 
-#include "kernel/fs/path.h"
+#include "file.h"
+#include "fs.h"
+#include "path.h"
 
-
-/*
- * 没有相对路径，因为进程没有记录路径
- * 所有都看作绝对路径
- * 路径规则见 is_vaild_path
- */
-Inode inode_table[FS_MAX_INODE_COUNT];
 File file_table[FS_MAX_FILE_COUNT];
-
-// 根文件目录
 File* root_file;
-Inode* root_inode;
 
 File* find_empty_file(){
     for (u64 i = 0; i < FS_MAX_FILE_COUNT; i ++){
@@ -29,21 +19,27 @@ File* find_empty_file(){
     return NULL;
 }
 
-Inode* find_empty_inode(){
-    for (u64 i = 0; i < FS_MAX_INODE_COUNT; i ++){
-        ASSERT(inode_table[i].ino == i);
-        if (inode_table[i].ref == 0) return &inode_table[i];
-    }
-    return NULL;
+void ref_file(File *file){
+    critical_enter();
+    file->ref ++;
+    critical_exit();
 }
 
-Inode *find_inode(u64 ino){
-    ASSERT(ino < FS_MAX_INODE_COUNT);
-    return &inode_table[ino];
+void unref_file(File * file){
+    critical_enter();
+    ASSERT(file->ref != 0);
+    if (-- file->ref == 0){
+        unref_inode(file->inode); // 对 inode 进行解引用
+        *file = (File){0}; // clear
+    }
+    critical_exit();
 }
 
 /* 
  * 打开新文件 
+ * returns:
+ *      NULL failed
+ *      else success
  * NOTE:: 会对 inode 进行引用
  */
 File* create_file(FileOp *op, Inode *inode, u64 offset, u32 flags){
@@ -65,292 +61,40 @@ failed:
     return NULL;
 }
 
-/* 
- * 创建新Inode 
- * need_size 需要小于 PAGE_SIZE 
- * NOTE: 不会对 新inode->ref 做一次引用，调用者根据需要自己引用
- */
-Inode* create_inode(u64 need_size, u32 mode){
-    critical_enter();
+/* 通用文件读取操作 */
+i64 read_file(File *f, char *buf, u64 n){
+    if (!f) return -1;
+    if (!f->inode) return -1;
+    if (!(f->flags & O_READ)) return -1;
+    if (!n) return 0;
 
-    if (need_size > PAGE_SIZE) goto failed;
-
-    // 1. find
-    Inode* in = find_empty_inode();
-    if (!in) goto failed;
-
-    // 2. init
-    in->vaddr = kalloc_page(); // 固定为 1 page
-    if(!in->vaddr) goto failed;
-    // 默认清空 固定为 1 page
-    memset(in->vaddr, 0, PAGE_SIZE);
-    in->cap = PAGE_SIZE;
-    in->size = 0;
-    in->mode = mode;
-
-    critical_exit();
-    return in;
-
-    // free_page:
-failed:
-    critical_exit();
-    return NULL;
-}
-
-/* 
- * 将 son文件 插入 fa目录 下，fname 是文件名
- * 目录文件满了返回 false
- * 对 file 进行一次引用
- */
-bool insert_dir_entry(Inode * fa, Inode* son, StringView fname){
-    if unlikely (!fa || fa->mode != INODE_DIR)      return false;
-    if unlikely (!son)                              return false;
-    if unlikely (!fname.data || fname.count == 0)   return false;
-    if unlikely (fname.count >= FILE_NAME_MAX)      return false;
-    if unlikely (fa->size == fa->cap)               return false;
-    if unlikely (lookup_dir_entry(fa, fname))       return false;
-    if unlikely (!is_vaild_filename(fname))         return false;
-
-    critical_enter();
-    DirEntry* d = (DirEntry*)fa->vaddr;
-    u64 count = fa->cap / sizeof(DirEntry);
-
-    for (u64 i = 0; i < count; i ++){
-        if (d[i].inode == NULL){
-            d[i].inode = son;
-            sv_to_cstr_buf(fname, d[i].name, FILE_NAME_MAX);
-            ref_inode(son); // ref
-            fa->size += sizeof(DirEntry);
-
-            critical_exit(); 
-            return true;
-        }
+    i64 cost = 0;
+    while ((u64)cost < n){
+        i64 read_in = f->op->read(f, buf + cost, n - cost);
+        if (read_in < 0) return -1;
+        if (read_in == 0) break;
+        cost += read_in;
     }
 
-    critical_exit(); 
-    return false;
+    return cost;
 }
 
-/*
- *  释放目录项，不检查任何东西，会对inode unref
- */
-void clean_dir_entry(Inode* fa_inode, DirEntry* e){
-    Inode *found = e->inode;
-    e->inode = NULL;
-    e->name[0] = 0;
-    fa_inode->size -= sizeof(DirEntry);
-    unref_inode(found); 
-    return;
-}
+/* 文件通用写入操作 */
+i64 write_file(File *f, const char *buf, u64 n){
+    if (!f) return -1;
+    if (!f->inode) return -1;
+    if (!(f->flags & O_WRITE)) return -1;
+    if (!n) return 0;
 
-/* 
- * 释放一个文件目录项 并且对其的 inode unref，所以会 free Inode
- * 释放 size
- */
-bool remove_dir_entry(Inode *fa, Inode *son){
-    if unlikely (!fa || fa->mode != INODE_DIR)              return false;
-    if unlikely (!son)                                      return false;
-
-    critical_enter();
-
-    DirEntry* d = (DirEntry*)fa->vaddr;
-    for (u64 i = 0; i < fa->cap / sizeof(DirEntry); i ++){
-        if (d[i].inode == son){
-            clean_dir_entry(fa, &d[i]);
-            critical_exit();
-            return true;
-        }
+    i64 cost = 0;
+    while ((u64)cost < n){
+        i64 write_in = f->op->write(f, buf + cost, n - cost);
+        if (write_in < 0) return -1;
+        if (write_in == 0) break;
+        cost += write_in;
     }
 
-    critical_exit();
-    return false;
-}
-
-/*
- * 根据文件名在指定目录中寻找文件
- */
-DirEntry* lookup_dir_entry(Inode *fa, StringView sv){
-    if unlikely (!fa || fa->mode != INODE_DIR)              return NULL;
-    if unlikely (!sv.data || sv.count == 0)                 return NULL;
-    if unlikely (sv.count >= FILE_NAME_MAX)                 return NULL;
-    DirEntry* d = (DirEntry*)fa->vaddr;
-
-    critical_enter();
-    for (u64 i = 0; i < fa->cap / sizeof(DirEntry); i ++){
-        if (d[i].inode == NULL) continue;
-        if (sv_eq(sv_from_cstr(d[i].name), sv)){
-            critical_exit();
-            return &d[i];
-        }
-    }
-    critical_exit();
-    return NULL;
-}
-
-void free_inode(Inode *inode){
-    critical_enter();
-
-    if (inode == root_inode){
-        PANIC("free root inode error");
-    }
-
-    kfree(inode->vaddr);
-    u64 id = inode->ino;
-    memset(inode, 0, sizeof(Inode)); // clear ?
-    inode->ino = id;
-
-    critical_exit();
-}
-
-/* 
- * 引用计数增加 
- * NOTE: 谁持有这个 Inode 就需要增加引用次数
- */
-void ref_inode(Inode *inode){
-    critical_enter();
-    inode->ref ++;
-    critical_exit();
-}
-
-/* inode 引用计数减少，归零时内部 free */
-void unref_inode(Inode *inode){
-    critical_enter();
-    ASSERT(inode->ref >= 1);
-    inode->ref --;
-    if (inode->ref == 0){
-        free_inode(inode);
-    }
-    critical_exit();
-}
-
-/* 
- * out is the entry
- * 0 success 
- * -1 failed 
- */
-i64 dir_readdir(File *f, DirEntry *out){
-    if (!f || f->inode->mode != INODE_DIR) return -1;
-
-    Inode *dir = f->inode;
-    u64 n = dir->cap / sizeof(DirEntry);
-    DirEntry *d = (DirEntry *)dir->vaddr;
-
-    for (u64 i = f->offset / sizeof(DirEntry); i < n; i ++) {
-        if (!d[i].inode) continue;
-        *out = d[i];
-        f->offset = (i + 1) * sizeof(DirEntry);
-        return 0;
-    }
-    return -1;
-}
-
-i64 dir_release(File* f){
-    ASSERT(f && f->inode);
-    unref_inode(f->inode);
-    return 0;
-}
-
-/*
- *  只对子目录的Inode进行减少引用
- */
-i64 dir_free(File* f){
-    critical_enter();
-    int count = f->inode->cap / sizeof(DirEntry);
-    DirEntry* dir = (DirEntry*)f->inode->vaddr;
-
-    for (int i = 0; i < count; i ++){
-        if (dir[i].inode) unref_inode(dir[i].inode);
-    }
-
-    critical_exit();
-    return 0;
-}
-
-/*
- *  在根目录寻找 path 的父目录，如果 path 的父目录是根目录也成立
- *  无法对根目录查找父亲目录
- *  returns : 
- *      bool : success or faield
- *      fa_inode : Dir Inode
- *      fa_path : Dir path name
- */
-bool lookup_parent(StringView path, Inode **fa_inode, StringView *fa_name){
-    critical_enter();
-
-    // 根目录拒绝
-    if unlikely (!is_vaild_path(path) || path.count == 1) goto failed;
-
-    StringView dir_path;
-    if unlikely (!path_get_dir(path, &dir_path))      goto failed;
-    if unlikely (!path_get_filename(path, fa_name))   goto failed;
-    if unlikely (fa_name->count == 0 || fa_name->count >= FILE_NAME_MAX) goto failed;
-
-    Inode *res = lookup_inode(root_inode, dir_path);
-    if (!res) goto failed;
-    if (res->mode != INODE_DIR)     goto failed;
-
-    *fa_inode = res;
-
-    critical_exit();
-    return true;
-failed:
-    critical_exit();
-    return false;
-}
-
-/* 
- * 在从指定目录开始寻找Inode目录项路径
- * returns:
- *      address of inode
- *      If failed, returns NULL
- */
-Inode *lookup_inode(Inode *dir, StringView path){
-    if (!dir) return NULL;
-
-    critical_enter(); // 防止中断释放其中的文件
-
-    // 防御一下
-    if (!is_vaild_path(path)){
-        goto failed;
-    }
-
-    // 合法路径并且长度为 1 即 "/" 返回根
-    if (path.count == 1){
-        dir = root_inode;
-        goto success;
-    }
-
-    while (path.count){
-        sv_chop_left(&path, 1);  // 切掉每段的先导 '/'
-        if (path.count == 0) break;
-
-        u64 pos = path.count;
-        for (u64 i = 0; i < path.count; i ++){
-            if (path.data[i] == '/'){
-                pos = i;
-                break;
-            }
-        }
-
-        StringView file_name = sv_from_parts(path.data, pos);
-
-        DirEntry *e = lookup_dir_entry(dir, file_name);
-        if (!e) goto failed;
-
-        dir = e->inode;
-
-        sv_chop_left(&path, pos);
-
-        // 如果后面还有
-        if (path.count && dir->mode != INODE_DIR) goto failed;
-    }
-
-success:
-    critical_exit();
-    return dir;
-failed:
-    critical_exit();
-    return NULL;
+    return cost;
 }
 
 /* 
@@ -378,9 +122,12 @@ File* open_file(StringView name, u32 flags, FileOp* operation, u32 i_mode){
 
     bool is_create = false;
 
-    if (!inode){
+    if (sv_eq(name, sv_lit("/"))){
+        inode = root_inode;
+    }else if (!inode){
+        if (!((flags & O_CREATE))) goto failed;
+
         is_create = true;
-        if (!(flags & O_CREATE)) goto failed;
         flags &= ~O_CREATE;
 
         /* ref = 0 */
@@ -391,7 +138,10 @@ File* open_file(StringView name, u32 flags, FileOp* operation, u32 i_mode){
         if (!insert_dir_entry(dir_inode, inode, filename)){
             goto unref_file_inode; /* ref = 1 -> 0 */
         }
-        unref_inode(inode); /* ref = 1 目录项持有 */
+
+        unref_inode(inode); 
+        /* ref = 1 目录项持有 */
+
     }else{
         if (inode->mode != i_mode) goto failed;
     }
@@ -410,62 +160,30 @@ failed:
     return NULL;
 }
 
-i64 file_read(File *f, char *buf, u64 n){
-    if (!f) return -1;
-    if (!f->inode) return -1;
-    if (!(f->flags & O_READ)) return -1;
-    if (!n) return 0;
+/* 
+ *  out 返回目录指针
+ *  return: bool
+ */
+bool dir_readdir(File *f, void *user_out){
+    if (!f || f->inode->mode != INODE_DIR) return -1;
 
-    i64 cost = 0;
-    while ((u64)cost < n){
-        i64 read_in = f->op->read(f, buf + cost, n - cost);
-        if (read_in < 0) return -1;
-        if (read_in == 0) break;
-        cost += read_in;
+    Inode *dir = f->inode;
+    u64 n = dir->cap / sizeof(DirEntry);
+    DirEntry *d = (DirEntry *)dir->vaddr;
+
+    for (u64 i = f->offset / sizeof(DirEntry); i < n; i ++) {
+        if (!d[i].inode) continue;
+        f->offset = (i + 1) * sizeof(DirEntry);
+        if (copy_to_user(current_process->page_table, user_out, d[i].name, FILE_NAME_MAX) < 0){
+            return -1;
+        }
+        return 0;
     }
-
-    return cost;
+    return -1;
 }
 
-/* 文件通用写入操作 */
-i64 file_write(File *f, const char *buf, u64 n){
-    if (!f) return -1;
-    if (!f->inode) return -1;
-    if (!(f->flags & O_WRITE)) return -1;
-    if (!n) return 0;
-
-    i64 cost = 0;
-    while ((u64)cost < n){
-        i64 write_in = f->op->write(f, buf + cost, n - cost);
-        if (write_in < 0) return -1;
-        if (write_in == 0) break;
-        cost += write_in;
-    }
-
-    return cost;
+i64 dir_release(File* f){
+    ASSERT(f && f->inode);
+    unref_inode(f->inode);
+    return 0;
 }
-
-void ref_file(File *file){
-    critical_enter();
-    file->ref ++;
-    critical_exit();
-}
-
-void unref_file(File * file){
-    critical_enter();
-    ASSERT(file->ref != 0);
-    if (-- file->ref == 0){
-        file->op->free(file); // 唯一调用 free 地点
-        unref_inode(file->inode); // 对 inode 进行解引用
-    }
-    critical_exit();
-}
-
-/* 创建Inode并且默认引用一次 */
-Inode* create_ref_inode(u64 need_size, u32 mode) {
-    Inode* inode = create_inode(need_size, mode);
-    ref_inode(inode);
-    return inode;
-}
-
-

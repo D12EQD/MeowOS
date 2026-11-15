@@ -129,7 +129,6 @@ i64 process_find_empty_fd();
 
 void sleep_prepare(void *chan);
 void sleep();
-void sleep_return();
 
 u64 kwait(u64 exit_number);
 void kkill(i64 pid);

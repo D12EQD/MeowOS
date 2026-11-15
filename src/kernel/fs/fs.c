@@ -1,9 +1,10 @@
 #include "file.h"
 #include "fs.h"
+#include "pipe.h"
 #include "path.h"
 #include "reg.h"
 
-#include "kernel/fs/io.h"
+#include "io.h"
 #include "kernel/proc/process.h"
 #include "kernel/mm/def.h"
 #include "kernel/lib/printk.h"
@@ -11,11 +12,9 @@
 
 // 常规目录文件
 FileOp dir_fop = {
-    .lseek = NULL,
+    .lseek = reg_lseek, // TEST: 好像可以共享？
     .read = NULL,
-    .release = dir_release, // TODO : 释放空间
-    .free = dir_free,
-    .readdir = dir_readdir,
+    .release = dir_release,
     .write = NULL
 };
 
@@ -69,14 +68,8 @@ void fs_dfs(Inode *dir, const char *prefix, int depth) {
 }
 
 void fs_init(){
-    memset(inode_table, 0, sizeof(Inode) * FS_MAX_INODE_COUNT);
+    inode_init();
     memset(file_table, 0, sizeof(File) * FS_MAX_FILE_COUNT);
-
-    for (u64 i = 0; i < FS_MAX_INODE_COUNT; i ++){
-        inode_table[i].ino = i;
-    }
-
-    root_inode = create_inode(PAGE_SIZE, INODE_DIR);
     root_file = create_file(&dir_fop, root_inode, 0, O_RW);
 
     if (fs_mkdir(sv_lit(IO_DIR)) == false){
@@ -88,6 +81,7 @@ void fs_init(){
 /* 创建目录 */
 bool fs_mkdir(StringView path){
     critical_enter();
+
     Inode* fa_inode;
     Inode* inode;
     StringView fa_path; 
@@ -95,20 +89,29 @@ bool fs_mkdir(StringView path){
     bool ret;
  
     // 只需要在这检查fname
+    // pr_debug("path_get_filename");
     ret = path_get_filename(path, &fname);
     if (!ret) goto failed;
 
-    // insert
+    // pr_debug(SV_Fmt, SV_Arg(fname));
+
+    // 查找父目录
+    // pr_debug("lookup_parent");
     ret = (lookup_parent(path, &fa_inode, &fa_path));
     if (!ret) goto failed;
 
-    inode = create_ref_inode(PAGE_SIZE, INODE_DIR); // ref = 1
-    if (!inode) goto failed;
- 
-    ret = insert_dir_entry(fa_inode, inode, fname); // ref = 2
-    if (!ret) goto free_new_inode;
+    // pr_debug("create_ref_inode");
+    inode = create_inode(PAGE_SIZE, INODE_DIR);
 
-    unref_inode(inode); // ref = 1
+    if (!inode) goto failed;
+    ref_inode(inode);
+
+    // ref = 1
+    ret = insert_dir_entry(fa_inode, inode, fname);
+    if (!ret) goto free_new_inode; // ref = 1
+    // ref = 2
+
+    unref_inode(inode);
 
     critical_exit();
     return true;
@@ -136,6 +139,8 @@ bool fs_unlink(StringView path){
 
     DirEntry* e = lookup_dir_entry(fa_inode, fname);
     if (!e) goto failed;
+
+    if (e->inode->mode == INODE_DIR && e->inode->size != 0) goto failed;
 
     clean_dir_entry(fa_inode, e);
     critical_exit();
@@ -186,4 +191,5 @@ File *dup_file(File *f){
     critical_exit();
     return f;
 }
+
 

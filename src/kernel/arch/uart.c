@@ -66,7 +66,6 @@ void uart_write(char* buf, int n){
             i += 1;
         } else {
             sleep();
-            sleep_return();
         }
     }
 }

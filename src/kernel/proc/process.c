@@ -433,19 +433,19 @@ i64 kfork(const char * name){
 
     // 1. data
     if unlikely (copy_page_table(
-            fa->page_table, p->page_table, UESR_VADDR_START, USER_DATA_PAGE_COUNT) == false){
+        fa->page_table, p->page_table, UESR_VADDR_START, USER_DATA_PAGE_COUNT) == false){
         goto copy_page_table_failed;
     }
 
     // 2. code
     if unlikely (copy_page_table(
-            fa->page_table, p->page_table, USER_CODE_START, USER_CODE_PAGE_COUNT) == false){
+        fa->page_table, p->page_table, USER_CODE_START, USER_CODE_PAGE_COUNT) == false){
         goto copy_page_table_failed;
     }
 
     // 3. heap
     if unlikely (copy_page_table(
-            fa->page_table, p->page_table, UESR_HEAP_START, fa->alloc_page_count) == false){
+        fa->page_table, p->page_table, UESR_HEAP_START, fa->alloc_page_count) == false){
         goto copy_page_table_failed;
     }
 
@@ -464,7 +464,10 @@ i64 kfork(const char * name){
 
     // TODO : fork 时文件表复制指针并 f_ref ++，父子共享 offset
     for (int i = 0; i < FS_MAX_FILE_COUNT; i ++){
- 
+        File *file = current_process->file_table[i];
+        if (!file) continue;
+    
+        p->file_table[i] = dup_file(file);
     }
 
     *(p->trap_frame_page) = *(fa->trap_frame_page);
@@ -488,20 +491,14 @@ Process * get_proc_from_pid(i64 pid){
 inline void sleep_prepare(void *chan){
     critical_enter();
     current_process->chan = chan;
-}
-
-/* 睡眠返回 */
-inline void sleep_return(){
     critical_exit();
 }
 
 /* 睡眠 让出当前 cpu */
 void sleep(){
-    critical_enter();
     ASSERT(current_process->chan != NULL);
-
+    critical_enter();
     current_process->state = PROC_SLEEP;
- 
     yield();
     critical_exit();
 }
@@ -543,7 +540,6 @@ u64 kwait(u64 exit_number){
 
         sleep_prepare(current_process);
         sleep();
-        sleep_return();
     }
 }
 
@@ -648,6 +644,9 @@ failed:
 /*
  *  首先寻找一个空闲位置存放新文件描述符
  *  调用者应该需要解决并发问题
+ *  return: 
+ *      >= 0 success
+ *      < 0 failed
  */
 i64 process_find_empty_fd(){
     i64 fd = -1;
