@@ -38,6 +38,7 @@ typedef struct Inode_S {
 
 
 extern Inode *root_inode;
+extern Inode inode_table[FS_MAX_INODE_COUNT];
 
 void inode_init();
 Inode *find_empty_inode();

@@ -27,7 +27,23 @@
     X(READDIR,  readdir, 14)        \
     X(UNLINK,   unlink, 15)         \
     X(PIPE,     pipe,   16)         \
-    X(LSEEK,    lseek,  17)
+    X(LSEEK,    lseek,  17)         \
+    X(DIAG,     diag,   18)
+
+
+/*
+ *  诊断快照
+ *  与 src/user/os/syscall.h 的 Kstat 保持字段顺序一致，
+ *  用户态用 diag(&ks) 一次取回全部计数
+ */
+typedef struct {
+    u32 file_used;
+    u32 file_orphan;
+    u32 inode_used;
+    u32 inode_pipe;
+    u32 proc_used;
+} Kstat;
+
 
 typedef u64 (*syscall_fn_t)(void);
 

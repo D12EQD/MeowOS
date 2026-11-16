@@ -21,7 +21,11 @@ File* find_empty_file(){
 
 void ref_file(File *file){
     critical_enter();
-    file->ref ++;
+    if (file->op->dup){  // 优先尝试调用 FileOp 的 ref_file
+        ASSERT(file->op->dup(file) == 0);
+    }else{
+        file->ref ++;
+    }
     critical_exit();
 }
 

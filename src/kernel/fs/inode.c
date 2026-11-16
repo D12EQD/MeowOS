@@ -56,11 +56,13 @@ void ref_inode(Inode *inode){
 /* inode 引用计数减少，归零时内部 free */
 void unref_inode(Inode *inode){
     critical_enter();
+
     ASSERT(inode->ref >= 1);
     inode->ref --;
     if (inode->ref == 0){
         ASSERT(inode->free_inode(inode));
     }
+
     critical_exit();
 }
 

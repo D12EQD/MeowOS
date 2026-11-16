@@ -36,7 +36,8 @@ typedef struct DirEntry_S {
     X(READDIR,  readdir, 14)        \
     X(UNLINK,   unlink, 15)         \
     X(PIPE,     pipe,   16)         \
-    X(LSEEK,    lseek,  17)
+    X(LSEEK,    lseek,  17)         \
+    X(DIAG,     diag,   18)
 
 
 /* 编号 */
@@ -68,3 +69,14 @@ i64 dup2(i64 oldfd, i64 newfd);
 i64 readdir(i64 fd, DirEntry *out);
 i64 lseek(i64 fd, i64 offset, i64 flag);
 i64 pipe(i64* fd1, i64* fd2);
+
+/* 内核诊断快照，字段顺序与 src/kernel/syscall/syscall.h 的 Kstat 一致 */
+typedef struct {
+    u32 file_used;
+    u32 file_orphan;
+    u32 inode_used;
+    u32 inode_pipe;
+    u32 proc_used;
+} Kstat;
+
+i64 diag(Kstat *out);

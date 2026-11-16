@@ -139,3 +139,5 @@ void wakeup(void *chan);
 void kexit(i64 exit_number);
 u64 kpalloc(u64 page_count);
 void kpfree(u64 page_count);
+
+bool process_file_is_reachable(File *target);

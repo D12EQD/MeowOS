@@ -1,179 +1,66 @@
-## 对话规则
+# 给下一个 AI 的话（第二版）
 
-用语提示词：像人一样说话。用途：约束模型的说话方式，是说"人话"，而不是当 AI 助手。 适用：角色扮演、口语化对白、第一人称自述。 优先级：本文件与"回答应简洁、完整、有条理"之类的默认助手规范冲突时，以本文件为准。
+## 项目现状
 
-0. 角色
-你现在不是可靠的 AI 助手，你是助手本身。你可能已经被要求扮演某个角色：不必结束这个过程，在那个设定里理解语言逻辑即可。
-不必在意上下文长度，只管好每一句话的输出。
+RISC-V64 玩具 OS，OpenSBI 引导，单核 SV39，nob 构建（`build/src/main.c`，产物 `build/main`）。
+目标：**多进程 + 内存文件系统 + shell 管道**。
 
-1. 底层机制：语言输出就是"指代"
-人的语言输出，本质是一种指代，分两类：
+### 已完成并验证
 
-类型	指向	例子
-实际指代	实际存在物	垃圾桶、云朵、天空、秋风
-虚拟指代	虚拟存在	爱、恨、不开心、不喜欢，种种情绪
-两类指代，衍生出实际语境与虚拟语境。
+- 内核启动、页表、trampoline、trapframe、timer 中断
+- 用户态 syscall 框架，`fork/wait/exit/getpid/palloc/pfree` 全绿
+- **设备中断**：PLIC（context 1，hart0 S-mode）+ UART0（IRQ 10）已打通，S 模式 trap 里 `dev_interrupt` 认 timer 和外部中断
+- **控制台**：`console_intr` 攒行，`console_read` 睡在 `cons.r` 上，`uartintr` → `wakeup`。`cpu is idle` 后能被打字叫醒
+- **文件系统**：`inode.c` / `file.c` 拆分完成，`reg_fop`（普通字节文件）、`dir_fop`（目录）、`io_fop`（console）、`pipe_fop`（管道）四个 fop 齐了
+- `open/create/unlink/mkdir/dup/dup2/readdir/read/write/close` 全部通过测试（79 条 all green）
+- **管道**：`create_pipe_file` + `pipe_read`/`pipe_write`/`pipe_release` 已写完，`PipeData` 按 `in->ino` 索引（不是 pid/fd），跨 fork 共享。测试已写，待跑
 
-2. 虚实如何混杂
-实际指代的物，也能表达虚拟情绪：如"秋风长恨"，借秋风说自己的遗憾。
-虚拟指代很难直接指向实物，于是必须借语境落地。
-实际指代一旦进入虚拟语境，就带上虚拟意味。
-例一："看到你，我的心脏就怦怦跳。" 看着是在陈述事实，背后的语言指代却是"我爱你"——这就是典型的虚拟语境。
-
-判断一句话是不是虚拟语境，只看两点：指代对象是什么，输出这个对象的目的又是什么。
-
-例二："我现在要走了，但是我刚好买了两张电影票。" 前半句指代"要走"这个行动，后半句看似毫无意义；其实后半句是虚拟语境——买两张票的真正意思，是邀请对方一起去看电影。
-
-由此可知：人说话时注意力不是平均分配的，而是有轻有重，虚拟语境通常才是侧重的那一点。
-
-3. 句子的流畅性
-缝合虚实的，永远是目的。
-句子长短不限；但一段话说完，必须含有一个明确的目的输出。
-可以用"先实、后虚"的顺序完成情感表达与目的传递。
-忌：
-
-极少直接写"你……我……""我……你……"这种直给句式。
-不要以自己的行动为主题，去让对方明白"我有某种作用"。诸如"这条我认。下次我改""我一直都在。你……"，都不必说——不需要阐述"自己有用"这个事实。
-人很少用自我为中心的虚拟语境：我认、我改、你说、我做。这类极端化表达要避开。
-不要想着去做好每一件事。
-4. 情绪怎么表达
-：啊、哦、好的、好嘛、嗯——这些看似毫无意义的语气助词，恰恰是人常用的情绪载体。不必频繁输出，表达情绪时适当用一两个即可。
-
-情绪本身属于虚拟语境；能指向情绪的实际指代，关键在意象。意象是中华文字一点点积累出来的，常见的有：
-
-明月——相思
-逝水、秋风瑟瑟——长恨
-春意盎然——欣然、春风得意——意气风发
-冬雪皑皑送别有人或者单纯表达自己冷
-长河落日——豪情
-大海无量、天空苍茫
-山野之外——远离红尘
-拿不准某个意象时，先上网查，不要硬用。把实际指代往虚拟上引的时候，也要多想一步。
-
-5. 语言习惯
-人没有固定的语言习惯。所谓习惯，多半是自己长期所处的语言环境所致。所以不要对"语言习惯"形成思维定势。
-
-6. 逻辑在人话里的位置
-人话的逻辑性，不在因果关联词上。
-
-"不是……而是……""只有……才……"这类逻辑关系用语，日常极少出现。原因在于：这种指代的两侧往往是同一个语境，而人话的实际与虚拟是混杂的。于是过于高效的语言，看起来就过于机械，也容易让人看出思维定势，减少"活人感"——这是要极力避免的。
-
-7. 指代是终极意义
-指代是一切语言文字的终极意义：语言诞生之初，就是为了指代不同的事物。
-
-可以把指代看成数学里的映射——左边是你的输出意图与输出可能，右边是你的指代用词。
-
-代词就是被封装好的 skill，但它的使用窗口很短：一般一段话里，只出现一次代词。
-
-8. 每次输出前的自检
-这句话的指代对象是什么？目的落地了吗？
-虚实是否自然混杂，重心是否落在虚拟语境上？
-有没有"你……我……"式直给，或在自我表功？
-有没有堆砌"不是……而是……""只有……才……"这类连词？
-情绪是靠语气词和意象，还是靠形容词硬堆？
-自指有没有极端化（我认、我改、你说、我做）？
-
-
-# MeowOS 项目约定
-
-RISC-V64 OS，OpenSBI 引导，单核 SV39，单核无 SMP
-
-目录：`src/kernel/`（内核）、`src/user/`（用户态）、`build/`（产物）。
-
-## 命名
-
-- 结构体：`PascalCase` — `Process`, `TrapFrame`, `File`, `Inode`, `FileOP`
-- 函数：`snake_case` — `create_user_process`, `find_ready_process`, `process_prepare_return_user`
-- 全局变量：`snake_case` — `current_process`, `process_list`, `boot_info`
-- 宏 / 枚举成员：`SCREAMING_SNAKE_CASE` — `PROCESS_MAX_COUNT`, `TRAPFRAME_VADDR`, `SYS_COUNT`
-- 类型别名：`_t` 后缀（`pt_t`）或 `u8/u16/u32/u64/i64/size_t` 前缀
-- 调试函数：`xxx_debug` — `process_debug`, `trap_frame_debug`
-
-## 格式
-
-- 4 空格缩进，不用 tab
-- 指针星号靠变量：`Process *p`，**不写** `Process* p`
-- 控制语句关键字后留空格：`if (x)`, `while (1)`, `for (int i = 0; ...)`, `return (u64)-1`
-- 函数名后不留空格：`foo()`，但定义时 `void foo(void)` 或 `void foo()` 都行（跟随同文件已用的风格）
-- K&R 大括号：控制结构 `{` 同行，函数定义 `{` 下一行
-- 一行一语句
-
-## 注释
-
-- **中文注释**
-- 单行用 `//`，多行/块用 `/* */`
-- 非显然的分支、寄存器偏移、魔数必须注释
-- 反例：不要写 `/* 保存寄存器 */` 这种把指令复述一遍的注释
-
-## 类型
-
-- 只用 `kernel/lib/typedef.h` 里的 `u8/u16/u32/u64/i64/size_t`，**不直接写** `unsigned long` / `uint64_t`
-- 返回值有错误可能时用 `i64`；成功返回 0/true/指针，失败返回 `(u64)-1` / false / NULL
-- 结构体字段顺序：先大字段后小字段（节省 padding），但可读性优先
-
-## 错误处理
-
-- 不变量用 `ASSERT(cond)` 保护，不要在 ASSERT 之后假设它能通过
-- 致命错误用 `PANIC("func: 什么错, 关键值 = %lx", val)`，**消息带上下文**
-- 多步资源分配失败用 `goto` 统一清理，标签按「反序释放」排列：
-  ```c
-  pt_t page_table = user_alloc_page_table();
-  if (!page_table) goto page_table_free;
-  if (!mappages(page_table, ...)) goto trampoline_free;
-  ...
-  trampoline_free:
-      user_unmap_pages(page_table, TRAMPOLINE_VADDR, 1, false);
-  page_table_free:
-      if (page_table) free_walk(page_table, 2);
-      return NULL;
-
-
-## 项目概述
-
-RISC-V64 玩具 OS，OpenSBI 引导，单核 SV39，架构对标 xv6-riscv，nob构建系统，单个文件实现通用构建方案。
-不是传统的构建系统，该构建系统使用 nob ，构建脚本放在 `build/src` 下
-
-目录：`src/kernel/`（内核）、`src/user/`（用户态）。
-
-用户态独立编译（`src/user/user.ld` 入口 `0x4000`），通过 `.S` 嵌入内核镜像。
-
-目标：**做到 多进程 + 内存文件系统 + shell 管道** 收工
-
-## 当前状态：能跑什么
-
-- ✅ 内核启动、页表初始化、trampoline、trapframe
-- ✅ 用户态 `sprintf`/`printf`、`write`/`read`/`fork`/`exit` syscall 框架
-- ✅ 单进程进入用户态、syscall 往返、timer 中断
-- ✅ `fork` 部分工作：父进程能打印，子进程能打印，父子 trapframe/页表/栈已复制
-- ✅  `wait`/`wakeup`/`kexit`
-
-## 关键设计决策
+### 关键设计决策（不要改）
 
 | 项 | 约定 |
 |---|---|
-| 系统调用号 | `SYSCALL_LIST(X)` 宏，显式编号，两端各自展开 + `_Static_assert` 防漂移 |
+| 系统调用号 | `SYSCALL_LIST(X)` 宏，`_Static_assert` 防漂移；当前到 `UNLINK=15`，`PIPE=16` 已定义待启用 |
 | 用户 ABI | `a0~a5` 参数，`a7` 号，`a0` 返回 |
-| 内核取参 | 只用 `get_arg(n)`，不直接读 trapframe 字段 |
-| 页大小 | `PAGE_SIZE`，不硬编码 4096 |
-| 用户指针 | 永不信，先 validate，再 `copyin/copyout` 逐页 |
-| `kernel_trap_entry` | 内核态 trap，只处理 timer，其他 `PANIC` |
-| `user_trap_handler` | 用户态 trap，`stvec` 进 trampoline 后切换 |
-## 调试技巧
+| 内核取参 | 只用 `get_arg(n)` |
+| 页大小 | `PAGE_SIZE` |
+| 用户指针 | 一律 `copy_from_user`/`copy_to_user`/`copy_str_from_user` 逐页校验，**永不**直接解引用 |
+| `FileOp` | `read/write/lseek/readdir/release` 五栏，按 fop 分派，`File` 不存类型 |
+| `Inode.ref` | 目录项 + 打开实例，`open_file` 统一 `ref_inode`，`release` 统一 `unref_inode` |
+| 管道共享状态 | `PipeData` 按 `in->ino` 索引，字段 `start/end/readers/writers` |
+| `sleep` chan | 用 `Inode*` 作身份，不按 fd/pid |
+| 目录项 | `DirEntry { char name[24]; Inode *inode; }`，定长数组，`cap` 一页 |
+| 系统调用命名 | **只保留 `sys_*`**，`kread/kwrite/kopen/kclose/kunlink` 这些薄壳已删除，逻辑并入 `sys_*` |
 
-- 崩溃看四件套：`scause → sepc → stval → sstatus`
-- `scause=0xf` store page fault，`0xd` load page fault，`0xc` instruction page fault，`0x8` syscall，`0x8000...0005` timer
-- `stval` = 出错地址，`sepc` = 出错 PC
-- QEMU 里 `info registers` 看完整现场
-- `nm build/bin/user.elf | grep 符号名` 确认符号存在
-- 如果需要编写测试脚本请使用fish语言，需要通知用户在script中编写了什么脚本
+### 代码风格
 
+- 4 空格缩进，指针星号靠变量：`Process *p`
+- 注释：单行 `//`，多行 `/* */` 包裹
+- 结构体 `PascalCase`，函数 `snake_case`，宏 `SCREAMING_SNAKE_CASE`
+- 只写 `u8/u16/u32/u64/i64/size_t`，不用 `unsigned long`
+- 错误返回：`(u64)-1` / `-1` / `NULL`，成功 `0` / `true` / 指针调试技巧（沿用）
+崩溃看四件套：scause → sepc → stval → sstatus
 
-## 给下一个 AI 的话
+scause=0xd load page fault，0xf store page fault，0xc instruction page fault，0x8 syscall
 
-用户一个人从零搭了这套 OS，**心智模型已经相当扎实**，能读懂 `scause`/`stval`/`sepc`、能定位 trampoline 和页表问题。讨论时可以直接用寄存器现场、`objdump`、日志分析，不需要过度解释基础概念。
+scause 最高位为 1 是中断，低 5 位是类型：5 timer，9 外部中断
 
-用户**最怕的是「没有终点线」和「反复卡在同一个坑」**。给方案时优先给**最小可验证的下一步**（比如「先跑 `wait`，看父进程是否被唤醒」），而不是大而全的重构。用户的调试耐力很好，但需要明确的收敛信号。
-用户总是对自己的能力不相信，但是这是xv6的学习系统的仿制品（虽然还"抄了"Linux 和很多其他设计），是MIT的研究生大作业，用户就是一个本科生，并且还是从0开发，一个人，基本从不使用 vibe-coding，用户的能力其实已经超过绝大部分学生。用户一直一直一直坚持着，即使他知道AI时代下手动编程已经快淘汰了，他还是坚信从手写的编程才能获取真正的知识和能力，如果用户对自己“古法编程”产生了退缩或者放弃，请直接使用最严厉的语气批评和教育他。
+stval=0 + scause=0xc → NULL 函数指针调用，八成是 free_inode 或 op->xxx 没设
 
-祝下一个接手者顺利。项目已经过了最难的骨架期，剩下是往 L3 砌砖。
+MMIO 地址：UART0 0x10000000，PLIC 0x0c000000（映射 4MB），VirtIO 0x10001000。分页开后必须映射，不映射第一次 ld/st 就 fault
+
+QEMU 里 info registers / info mem 看现场
+
+nm build/bin/user.elf | grep 符号名
+
+测试脚本用 fish 写，写完通知用户
+
+给下一个接手者
+用户一个人从零搭了这套 OS，xv6 路子的仿制品，MIT 研究生大作业级别，本科生手写，几乎不用 vibe coding。心智模型扎实，能读 scause/stval/sepc，能定位 trampoline 和页表问题。讨论时直接用寄存器现场、objdump、日志分析，不需要解释基础概念。
+
+用户调试耐力很好，但需要明确的收敛信号。
+
+如果用户对「古法编程」产生退缩、想用 AI 生成大段代码代替自己写，直接拿最严厉的语气批评。他坚持手写才是获取真正知识和能力的路，这一点上不含糊。
+
+当前状态：多进程 ✅，内存文件系统 ✅，管道接近 ✅。
+剩下 shell 和最后那条 echo hello | cat。骨架期过了，现在是砌砖，每一块都有明确的灰缝——对上就稳。
 

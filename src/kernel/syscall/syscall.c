@@ -7,7 +7,6 @@
 #include "kernel/fs/reg.h"
 
 #include "kernel/syscall/syscall.h"
-
 #include "kernel/mm/page.h"
 
 static u64 get_arg(int n) {
@@ -41,10 +40,10 @@ void syscall(){
     num = p->trap_frame_page->a7;
     if (num >= 0 && num < SYS_COUNT) {
         p->trap_frame_page->a0 = syscall_fn_list[num]();
-    } else {
-        p->trap_frame_page->a0 = -1;
+        return;
     }
 
+    p->trap_frame_page->a0 = -1;
 }
 
 u64 sys_getpid(void){
@@ -263,6 +262,7 @@ failed:
 u64 sys_pipe(){
     i64 *user_p1 = (i64 *)get_arg(0);
     i64 *user_p2 = (i64 *)get_arg(1);
+
     if (!user_p1 || !user_p2) goto failed;
  
     critical_enter();
@@ -290,4 +290,61 @@ u64 sys_lseek(){
     if (!file->op->lseek) return -1;
 
     return file->op->lseek(file, offset, flag);
+}
+
+/* File 槽是否还被某个进程的 fd 表指着 */
+static bool file_is_reachable(File *target){
+    for (i64 pid = 0; pid < PROCESS_MAX_COUNT; pid ++){
+        Process *p = get_proc_from_pid(pid);
+        if (!p) continue;
+
+        for (int fd = 0; fd < PROCESS_MAX_FD_COUNT; fd ++){
+            if (p->file_table[fd] == target) return true;
+        }
+    }
+    return false;
+}
+
+/*
+ *  诊断快照：把几张全局表的占用情况一次性写给用户
+ *  缓冲区长度必须等于 sizeof(Kstat)
+ *  returns:
+ *      0 成功
+ *      -1 失败
+ */
+u64 sys_diag(void){
+    Kstat *user_out = (Kstat *)get_arg(0);
+    u64 len = get_arg(1);
+
+    if (!user_out || len != sizeof(Kstat)) return -1;
+
+    Kstat ks = {0};
+
+    critical_enter();
+
+    for (u64 i = 0; i < FS_MAX_FILE_COUNT; i ++){
+        if (file_table[i].ref == 0) continue;
+
+        ks.file_used ++;
+        if (!file_is_reachable(&file_table[i])) ks.file_orphan ++;
+    }
+
+    for (u64 i = 0; i < FS_MAX_INODE_COUNT; i ++){
+        if (inode_table[i].ref == 0) continue;
+
+        ks.inode_used ++;
+        if (inode_table[i].mode == INODE_PIPE) ks.inode_pipe ++;
+    }
+
+    for (u64 i = 0; i < PROCESS_MAX_COUNT; i ++){
+        Process *p = get_proc_from_pid(i);
+        if (p && p->state != PROC_UNUSED) ks.proc_used ++;
+    }
+
+    critical_exit();
+
+    if (copy_to_user(current_process->page_table, user_out, &ks, sizeof(ks)) != (i64)sizeof(ks)){
+        return -1;
+    }
+    return 0;
 }

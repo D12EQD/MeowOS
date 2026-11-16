@@ -325,21 +325,22 @@ void free_user_process(Process* p){
     p->state = PROC_UNUSED;
     process_free_page_table(p);
 
-    // clean process
     int pid = p->pid;
-    memset(p, 0, sizeof(Process));
-
-    p->state = PROC_UNUSED;
-    p->kstack_bottom = KERNEL_STACK(pid);
-    p->pid = pid;
-    
-
     for (int i = 0; i < PROCESS_MAX_FD_COUNT; i ++){
         File* file = p->file_table[i];
         if (file){
             unref_file(file);
         }
     }
+
+    // clean
+    memset(p, 0, sizeof(Process));
+
+    // 重新赋值
+    p->state = PROC_UNUSED;
+    p->kstack_bottom = KERNEL_STACK(pid);
+    p->pid = pid;
+    
 
     critical_exit();
 }
@@ -462,11 +463,11 @@ i64 kfork(const char * name){
         if unlikely (memcpy(ps, fas, PAGE_SIZE) != PAGE_SIZE) goto memcpy_failed;
     }
 
-    // TODO : fork 时文件表复制指针并 f_ref ++，父子共享 offset
-    for (int i = 0; i < FS_MAX_FILE_COUNT; i ++){
+    // fork 时文件表复制指针并 f_ref ++，父子共享 offset
+    for (int i = 0; i < PROCESS_MAX_FD_COUNT; i ++){
         File *file = current_process->file_table[i];
         if (!file) continue;
-    
+
         p->file_table[i] = dup_file(file);
     }
 
@@ -657,4 +658,20 @@ i64 process_find_empty_fd(){
         }
     }
     return fd;
+}
+
+/* 
+ *  File 槽是否还被某个进程的打开表中 
+ *  PROCESS_MAX_COUNT * PROCESS_MAX_FD_COUNT 次访问
+ */
+bool process_file_is_reachable(File *target){
+    for (i64 pid = 0; pid < PROCESS_MAX_COUNT; pid ++){
+        Process *p = get_proc_from_pid(pid);
+        if (!p) continue;
+
+        for (int fd = 0; fd < PROCESS_MAX_FD_COUNT; fd ++){
+            if (p->file_table[fd] == target) return true;
+        }
+    }
+    return false;
 }

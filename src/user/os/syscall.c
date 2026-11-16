@@ -92,3 +92,8 @@ i64 lseek(i64 fd, i64 offset, i64 flag){
 i64 pipe(i64* fd1, i64* fd2){
     return syscall(SYS_PIPE, (u64)fd1, (u64)fd2, 0, 0, 0, 0);
 }
+
+/* 内核诊断快照，只读 */
+i64 diag(Kstat *out){
+    return (i64)syscall(SYS_DIAG, (u64)out, sizeof(Kstat), 0, 0, 0, 0);
+}

@@ -35,9 +35,14 @@ typedef struct FileOp_S {
     i64 (*write)(File *f, const char *user_buf, size_t n);
     i64 (*lseek)(File *f, i64 offset, int whence);
  
-    // 仅释放文件资源，需要处理引用计数
-    // 不对 inode 进行处理
+    /* 
+     * 仅释放文件资源，需要处理引用计数
+     * 不对 inode 进行处理 
+     */
     i64 (*release)(File *f);
+
+    /* 新增一个引用时调用 */
+    i64 (*dup)(File *f);
 } FileOp;
 
 
