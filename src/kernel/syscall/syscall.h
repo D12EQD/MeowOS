@@ -31,11 +31,6 @@
     X(DIAG,     diag,   18)
 
 
-/*
- *  诊断快照
- *  与 src/user/os/syscall.h 的 Kstat 保持字段顺序一致，
- *  用户态用 diag(&ks) 一次取回全部计数
- */
 typedef struct {
     u32 file_used;
     u32 file_orphan;

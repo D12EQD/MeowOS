@@ -568,7 +568,6 @@ void test_pipe_fd_exhaust(TestCtx* t){
 
 void test_pipe_leak_audit_start(TestCtx* t){
     test_case(t, "测试管道资源回收");
-
     test_expect(t, "诊断快照可用", diag(&kstat_before), 0);
 }
 
@@ -611,10 +610,12 @@ void test_pipe(TestCtx *t){
 }
 
 void test_fs(TestCtx *t){
+    test_pipe_leak_audit_start(t);
+
+    test_pipe(t);
     test_fs_mkdir(t);
     test_fs_unlink(t);
     test_fs_dup(t);
     test_fs_dup2(t);
     test_fs_readdir(t);
-    test_pipe(t);
 }
